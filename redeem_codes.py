@@ -77,6 +77,18 @@ def load_state(path: Path) -> set[str]:
 
 def save_state(path: Path, redeemed: set[str]) -> None:
     path.write_text(json.dumps({"redeemed": sorted(redeemed)}, indent=2) + "\n", encoding="utf-8")
+def ensure_state(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        save_state(path, set())
+        print(f"Initialized redemption state at {path}.")
+
+
+
+def resolve_state_path(config_path: Path, configured_path: str) -> Path:
+    state_path = Path(configured_path)
+    return state_path if state_path.is_absolute() else config_path.parent / state_path
+
 
 
 if hasattr(ctypes, "windll"):
@@ -346,6 +358,8 @@ def main() -> int:
         parser.error("--calibrate and --show-targets are mutually exclusive")
     config_path = Path(args.config)
     config = json.loads(config_path.read_text(encoding="utf-8"))
+    state_path = resolve_state_path(config_path, str(config.get("state_file", "redeemed_codes.json")))
+    ensure_state(state_path)
     if args.calibrate or args.show_targets:
         require_windows()
         hwnd, resolved_pid, resolved_name = find_game_window(args.pid, config.get("process_name"))
@@ -357,7 +371,6 @@ def main() -> int:
         return 0
     timing = config.get("timing", {})
     codes = scrape(config.get("sources", []), config.get("api_sources", []), float(timing.get("page_timeout_seconds", 30)))
-    state_path = Path(config.get("state_file", "redeemed_codes.json"))
     redeemed = load_state(state_path)
     pending = [code for code in codes if code.value not in redeemed]
     print(f"Found {len(codes)} unique codes; {len(pending)} pending redemption.")
