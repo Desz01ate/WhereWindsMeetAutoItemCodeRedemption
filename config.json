@@ -1,0 +1,40 @@
+{
+  "process_name": "wwm.exe",
+  "state_file": "redeemed_codes.json",
+  "sources": [
+    "https://game8.co/games/Where-Winds-Meet/archives/564660",
+    "https://www.pcgamer.com/games/action/where-winds-meet-codes",
+    "https://www.gamsgo.com/blog/where-winds-meet-codes"
+  ],
+  "api_sources": [
+    "https://codes.yar.gg/api/codes"
+  ],
+  "timing": {
+    "page_timeout_seconds": 30,
+    "ui_delay_seconds": 0.35,
+    "result_wait_seconds": 2.0
+  },
+  "ui": {
+    "exchange_button": [
+      0.552907,
+      0.246528
+    ],
+    "code_input": [
+      0.625291,
+      0.517361
+    ],
+    "submit_button": [
+      0.520349,
+      0.659028
+    ],
+    "cancel_button": [
+      0.462209,
+      0.65
+    ],
+    "coordinate_space": "client_normalized",
+    "calibrated_client_size": [
+      3440,
+      1440
+    ]
+  }
+}
