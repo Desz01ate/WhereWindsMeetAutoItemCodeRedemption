@@ -15,6 +15,18 @@ public class InverseBooleanConverter : IValueConverter
         value is bool b ? !b : false;
 }
 
+public class InverseBooleanToVisibilityConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        bool isTrue = value is bool b && b;
+        return isTrue ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotImplementedException();
+}
+
 public class StatusToBrushConverter : IValueConverter
 {
     private static readonly SolidColorBrush PendingBrush = new(Color.FromRgb(59, 130, 246));   // Blue

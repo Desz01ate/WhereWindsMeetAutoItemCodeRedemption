@@ -20,6 +20,7 @@
         <converters:NullToBoolConverter x:Key="NullToBoolConverter"/>
         <converters:EnumToBooleanConverter x:Key="EnumToBoolConverter"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <converters:InverseBooleanToVisibilityConverter x:Key="InverseBoolToVis"/>
 
         <!-- General Button Style -->
         <Style x:Key="RoundedButtonStyle" TargetType="Button">
@@ -226,23 +227,25 @@
                             ToolTip="Adjust where to click if game resolution or button positions change."/>
 
                     <Border Background="#D97706" CornerRadius="10" Padding="8,3" Margin="0,0,10,0" VerticalAlignment="Center"
-                            Visibility="{Binding IsFullyCalibrated, Converter={StaticResource InverseBooleanConverter}, ConverterParameter=vis}"
+                            Visibility="{Binding IsFullyCalibrated, Converter={StaticResource InverseBoolToVis}}"
                             ToolTip="Screen coordinates are not fully calibrated yet. Click 'Calibrate Coordinates...' to configure them.">
                         <TextBlock Text="Calibration Required" FontSize="11" FontWeight="Bold" Foreground="White"/>
                     </Border>
                 </StackPanel>
-                <!-- Right: Big Action Button -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Start Redemption Button -->
+                <!-- Right: Action Button (Stop button replaces Start button during redemption) -->
+                <Grid Grid.Column="2" VerticalAlignment="Center">
+                    <!-- Start Redemption Button (Visible when NOT redeeming) -->
                     <Button Content="Start Auto Redemption" Style="{StaticResource RedeemButtonStyle}"
                             Command="{Binding StartRedemptionCommand}"
                             ToolTip="Redeem selected codes in the game window. Requires coordinates to be calibrated."
-                            Visibility="{Binding IsRedeeming, Converter={StaticResource InverseBooleanConverter}, ConverterParameter=vis}"/>
-                    <!-- Stop Button -->
+                            Visibility="{Binding IsRedeeming, Converter={StaticResource InverseBoolToVis}}"/>
+
+                    <!-- Stop Button (Visible ONLY when redeeming, in place of Start button) -->
                     <Button Content="STOP Redemption" Style="{StaticResource StopButtonStyle}"
                             Command="{Binding StopRedemptionCommand}"
+                            ToolTip="Cancel the ongoing redemption process immediately."
                             Visibility="{Binding IsRedeeming, Converter={StaticResource BoolToVis}}"/>
-                </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
