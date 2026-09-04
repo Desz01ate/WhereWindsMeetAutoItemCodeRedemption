@@ -1,0 +1,81 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Publish
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.sln
+
+      - name: Run unit tests
+        run: dotnet test GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.sln -c Release --no-restore --verbosity normal
+
+      - name: Publish Self-Contained Application
+        run: |
+          dotnet publish GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -o ./publish/self-contained
+
+      - name: Publish Framework-Dependent Application
+        run: |
+          dotnet publish GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o ./publish/framework-dependent
+
+      - name: Prepare distribution packages
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ./dist
+
+          # Copy configuration file to both publish packages
+          Copy-Item -Path config.json -Destination ./publish/self-contained/
+          Copy-Item -Path config.json -Destination ./publish/framework-dependent/
+
+          # Create zip archives
+          Compress-Archive -Path ./publish/self-contained/* -DestinationPath ./dist/WhereWindsMeetItemCodeRedeemer-win-x64-selfcontained.zip
+          Compress-Archive -Path ./publish/framework-dependent/* -DestinationPath ./dist/WhereWindsMeetItemCodeRedeemer-win-x64.zip
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhereWindsMeetItemCodeRedeemer-Windows
+          path: ./dist/*.zip
+          retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
