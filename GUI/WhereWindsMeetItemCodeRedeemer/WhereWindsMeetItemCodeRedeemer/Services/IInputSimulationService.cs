@@ -18,7 +18,6 @@ public interface IInputSimulationService
         UiConfig ui,
         double uiDelaySeconds,
         double resultWaitSeconds,
-        bool spaceFallback = false,
         IProgress<string>? log = null,
         CancellationToken cancellationToken = default);
 }

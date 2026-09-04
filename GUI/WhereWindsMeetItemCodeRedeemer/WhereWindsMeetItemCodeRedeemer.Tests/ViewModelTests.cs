@@ -26,7 +26,7 @@ public class MockInputSimulationService : IInputSimulationService
     public void TypeText(string text) { }
     public void MoveCursorToNormalized(nint hwnd, NormalizedPoint point) { }
     public void ClickNormalized(nint hwnd, NormalizedPoint point) { }
-    public Task RedeemOneAsync(nint hwnd, string code, UiConfig ui, double uiDelaySeconds, double resultWaitSeconds, bool spaceFallback = false, IProgress<string>? log = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task RedeemOneAsync(nint hwnd, string code, UiConfig ui, double uiDelaySeconds, double resultWaitSeconds, IProgress<string>? log = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 public class MockCalibrationService : ICalibrationService
@@ -126,6 +126,51 @@ public class ViewModelTests
             vm.ManualCodeInput = "my_new_code";
             vm.AddManualCodeCommand.Execute(null);
             Assert.Single(vm.Codes);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task InputSimulationService_WhenNotCalibrated_ThrowsInvalidOperationException()
+    {
+        var gameService = new MockGameWindowService();
+        var service = new InputSimulationService(gameService);
+
+        var uncalibratedUi = new UiConfig
+        {
+            ExchangeButton = new NormalizedPoint(0.5, 0.5)
+            // Missing code_input, submit_button, cancel_button
+        };
+
+        Assert.False(uncalibratedUi.IsFullyCalibrated);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RedeemOneAsync(1234, "TESTCODE", uncalibratedUi, 0.1, 0.1));
+    }
+
+    [Fact]
+    public void ViewModel_IsFullyCalibrated_ReflectsConfigUiState()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "WWM_VMTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var configService = new ConfigService(Path.Combine(tempDir, "config.json"));
+            configService.CurrentConfig.Ui.ExchangeButton = null;
+
+            var vm = new MainViewModel(
+                configService,
+                new CodeScraperService(),
+                new MockGameWindowService(),
+                new MockInputSimulationService(),
+                new MockCalibrationService());
+
+            Assert.False(vm.IsFullyCalibrated);
         }
         finally
         {

@@ -224,30 +224,20 @@
                     <Button Content="Calibrate Coordinates..." Style="{StaticResource SecondaryButtonStyle}"
                             Command="{Binding OpenCalibrationCommand}" IsEnabled="{Binding CanOperate}"
                             ToolTip="Adjust where to click if game resolution or button positions change."/>
+
+                    <Border Background="#D97706" CornerRadius="10" Padding="8,3" Margin="0,0,10,0" VerticalAlignment="Center"
+                            Visibility="{Binding IsFullyCalibrated, Converter={StaticResource InverseBooleanConverter}, ConverterParameter=vis}"
+                            ToolTip="Screen coordinates are not fully calibrated yet. Click 'Calibrate Coordinates...' to configure them.">
+                        <TextBlock Text="Calibration Required" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                    </Border>
                 </StackPanel>
-
-                <!-- Center: Options checkboxes -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <CheckBox Content="Confirm each code" IsChecked="{Binding ConfirmEachCode}" Margin="0,0,14,0"
-                              Foreground="#CBD5E1" VerticalAlignment="Center" Cursor="Hand"
-                              ToolTip="Asks for your confirmation after each code before recording it as redeemed."/>
-
-                    <CheckBox Content="Space-bar fallback" IsChecked="{Binding SpaceFallback}" Margin="0,0,14,0"
-                              Foreground="#CBD5E1" VerticalAlignment="Center" Cursor="Hand"
-                              ToolTip="Uses Space key to submit if Submit button is not calibrated."/>
-
-                    <CheckBox Content="Stop after 1 code" IsChecked="{Binding StopAfterOne}"
-                              Foreground="#CBD5E1" VerticalAlignment="Center" Cursor="Hand"
-                              ToolTip="Stops after redeeming one code. Great for testing!"/>
-                </StackPanel>
-
                 <!-- Right: Big Action Button -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Start Redemption Button -->
                     <Button Content="Start Auto Redemption" Style="{StaticResource RedeemButtonStyle}"
                             Command="{Binding StartRedemptionCommand}"
+                            ToolTip="Redeem selected codes in the game window. Requires coordinates to be calibrated."
                             Visibility="{Binding IsRedeeming, Converter={StaticResource InverseBooleanConverter}, ConverterParameter=vis}"/>
-
                     <!-- Stop Button -->
                     <Button Content="STOP Redemption" Style="{StaticResource StopButtonStyle}"
                             Command="{Binding StopRedemptionCommand}"

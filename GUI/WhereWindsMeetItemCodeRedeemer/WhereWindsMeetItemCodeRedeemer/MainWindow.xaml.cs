@@ -17,6 +17,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (App.IsRunningAsAdministrator())
+        {
+            Title += " [Administrator]";
+        }
+
 
         _configService = new ConfigService();
         _scraperService = new CodeScraperService();
@@ -34,7 +39,6 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         _viewModel.RequestOpenCalibration += OnRequestOpenCalibration;
-        _viewModel.ConfirmRedemptionFunc = OnConfirmRedemptionAsync;
 
         // Auto-scroll activity log
         if (LogListBox.ItemsSource is INotifyCollectionChanged notify)
@@ -71,27 +75,7 @@ public partial class MainWindow : Window
         };
 
         calWindow.ShowDialog();
+        _viewModel.RefreshCalibrationStatus();
     }
 
-    private Task<bool?> OnConfirmRedemptionAsync(string code)
-    {
-        return Task.Run(() =>
-        {
-            return Dispatcher.Invoke(() =>
-            {
-                var result = MessageBox.Show(
-                    $"Submitted code: {code}\n\nDid Where Winds Meet confirm that this code was successfully redeemed?\n\n• Yes: Mark code as Redeemed in local state\n• No: Keep code as Pending to retry later\n• Cancel: Abort redeeming remaining codes",
-                    "Confirm Redemption Result",
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Question);
-
-                return result switch
-                {
-                    MessageBoxResult.Yes => (bool?)true,
-                    MessageBoxResult.No => (bool?)false,
-                    _ => (bool?)null
-                };
-            });
-        });
-    }
 }

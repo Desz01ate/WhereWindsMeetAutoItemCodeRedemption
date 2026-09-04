@@ -131,16 +131,14 @@ public class InputSimulationService : IInputSimulationService
         UiConfig ui,
         double uiDelaySeconds,
         double resultWaitSeconds,
-        bool spaceFallback = false,
         IProgress<string>? log = null,
         CancellationToken cancellationToken = default)
     {
-        if (ui.ExchangeButton == null || ui.CodeInput == null)
-            throw new InvalidOperationException("Exchange button or Code input coordinate is not configured. Please calibrate first.");
-
-        if (ui.SubmitButton == null && !spaceFallback)
-            throw new InvalidOperationException("Submit button is not calibrated. Calibrate or enable Space-bar fallback.");
-
+        if (!ui.IsFullyCalibrated)
+        {
+            throw new InvalidOperationException(
+                "Target coordinates are not fully configured. All targets (Exchange Button, Code Input, Submit Button, Cancel Button) must be calibrated before redeeming.");
+        }
         int uiDelayMs = (int)Math.Max(50, uiDelaySeconds * 1000);
         int resultWaitMs = (int)Math.Max(100, resultWaitSeconds * 1000);
 
@@ -152,11 +150,11 @@ public class InputSimulationService : IInputSimulationService
         await Task.Delay(uiDelayMs, cancellationToken);
 
         log?.Report("[2/6] Clicking Exchange button...");
-        ClickNormalized(hwnd, ui.ExchangeButton);
+        ClickNormalized(hwnd, ui.ExchangeButton!);
         await Task.Delay(uiDelayMs, cancellationToken);
 
         log?.Report("[3/6] Clicking Code Input and clearing text...");
-        ClickNormalized(hwnd, ui.CodeInput);
+        ClickNormalized(hwnd, ui.CodeInput!);
         await Task.Delay(50, cancellationToken);
         SendChord(NativeMethods.VK_CONTROL, NativeMethods.VK_A);
         await Task.Delay(50, cancellationToken);
@@ -165,23 +163,12 @@ public class InputSimulationService : IInputSimulationService
         TypeText(code);
         await Task.Delay(uiDelayMs, cancellationToken);
 
-        if (ui.SubmitButton != null)
-        {
-            log?.Report("[5/6] Clicking Submit button...");
-            ClickNormalized(hwnd, ui.SubmitButton);
-            await Task.Delay(uiDelayMs, cancellationToken);
+        log?.Report("[5/6] Clicking Submit button...");
+        ClickNormalized(hwnd, ui.SubmitButton!);
+        await Task.Delay(uiDelayMs, cancellationToken);
 
-            if (ui.CancelButton != null)
-            {
-                log?.Report("[6/6] Clicking Cancel/Close button...");
-                ClickNormalized(hwnd, ui.CancelButton);
-            }
-        }
-        else if (spaceFallback)
-        {
-            log?.Report("[5/6] Pressing Space fallback...");
-            SendKeyPress(NativeMethods.VK_SPACE, 120);
-        }
+        log?.Report("[6/6] Clicking Cancel/Close button...");
+        ClickNormalized(hwnd, ui.CancelButton!);
 
         log?.Report($"Waiting for result ({resultWaitSeconds:F1}s)...");
         await Task.Delay(resultWaitMs, cancellationToken);

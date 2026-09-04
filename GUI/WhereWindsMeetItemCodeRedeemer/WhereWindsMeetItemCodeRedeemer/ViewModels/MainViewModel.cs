@@ -43,14 +43,9 @@ public class MainViewModel : BaseViewModel
     private int _progressMax;
     private string _progressText = string.Empty;
 
-    private bool _confirmEachCode;
-    private bool _spaceFallback;
-    private bool _stopAfterOne;
-
     private ObservableCollection<string> _logEntries = new();
 
     public event Action? RequestOpenCalibration;
-    public Func<string, Task<bool?>>? ConfirmRedemptionFunc; // returns true for Yes, false for No/Retry, null for Abort
 
     public GameWindowInfo? GameInfo
     {
@@ -167,23 +162,6 @@ public class MainViewModel : BaseViewModel
         set => SetField(ref _progressText, value);
     }
 
-    public bool ConfirmEachCode
-    {
-        get => _confirmEachCode;
-        set => SetField(ref _confirmEachCode, value);
-    }
-
-    public bool SpaceFallback
-    {
-        get => _spaceFallback;
-        set => SetField(ref _spaceFallback, value);
-    }
-
-    public bool StopAfterOne
-    {
-        get => _stopAfterOne;
-        set => SetField(ref _stopAfterOne, value);
-    }
 
     public int TotalCodesCount => _codes.Count;
     public int PendingCodesCount => _codes.Count(c => c.Status == CodeStatus.Pending);
@@ -193,6 +171,13 @@ public class MainViewModel : BaseViewModel
     public ObservableCollection<string> LogEntries => _logEntries;
 
     public AppConfig Config => _configService.CurrentConfig;
+    public bool IsFullyCalibrated => _configService.CurrentConfig.Ui.IsFullyCalibrated;
+
+    public void RefreshCalibrationStatus()
+    {
+        OnPropertyChanged(nameof(IsFullyCalibrated));
+    }
+
 
     // Commands
     public ICommand RefreshGameStatusCommand { get; }
@@ -439,22 +424,20 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
-        if (!_configService.CurrentConfig.Ui.IsFullyCalibrated && !SpaceFallback)
+        if (!_configService.CurrentConfig.Ui.IsFullyCalibrated)
         {
             var res = MessageBox.Show(
-                "UI Coordinates have not been calibrated yet.\n\nWould you like to use Space-bar fallback for the submit button?",
-                "Calibration Warning",
+                "Redemption coordinates are not yet configured.\n\nAll 4 targets (Exchange Button, Code Input, Submit Button, and Cancel Button) must be calibrated before redeeming codes.\n\nWould you like to open the Calibration Window now?",
+                "Calibration Required",
                 MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
+                MessageBoxImage.Warning);
 
             if (res == MessageBoxResult.Yes)
             {
-                SpaceFallback = true;
+                RequestOpenCalibration?.Invoke();
             }
-            else
-            {
-                return;
-            }
+
+            return;
         }
 
         IsRedeeming = true;
@@ -485,37 +468,12 @@ public class MainViewModel : BaseViewModel
                         _configService.CurrentConfig.Ui,
                         _configService.CurrentConfig.Timing.UiDelaySeconds,
                         _configService.CurrentConfig.Timing.ResultWaitSeconds,
-                        SpaceFallback,
                         logProgress,
                         _redemptionCts.Token);
 
-                    if (ConfirmEachCode && ConfirmRedemptionFunc != null)
-                    {
-                        var confirmed = await ConfirmRedemptionFunc(item.Code);
-                        if (confirmed == true)
-                        {
-                            item.Status = CodeStatus.Success;
-                            _configService.AddRedeemedCode(item.Code);
-                            Log($"[Success] Confirmed redemption for {item.Code}. Saved to state.");
-                        }
-                        else if (confirmed == false)
-                        {
-                            item.Status = CodeStatus.Pending;
-                            Log($"[Skipped] Code {item.Code} kept as pending.");
-                        }
-                        else
-                        {
-                            Log("[Stop] Redemption aborted by user.");
-                            item.Status = CodeStatus.Pending;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        item.Status = CodeStatus.Success;
-                        _configService.AddRedeemedCode(item.Code);
-                        Log($"[Success] Redeemed code {item.Code}. Saved to state.");
-                    }
+                    item.Status = CodeStatus.Success;
+                    _configService.AddRedeemedCode(item.Code);
+                    Log($"[Success] Redeemed code {item.Code}. Saved to state.");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -526,11 +484,6 @@ public class MainViewModel : BaseViewModel
 
                 UpdateCounts();
 
-                if (StopAfterOne)
-                {
-                    Log("Single-code mode enabled: stopping after one redemption.");
-                    break;
-                }
             }
 
             Log("\n=== Redemption completed ===");

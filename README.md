@@ -23,12 +23,9 @@ A standalone Windows GUI application implemented natively in C# (.NET 10 WPF) lo
 1. **Automatic Game Detection**: Detects `wwm.exe` running in a visible window with real-time status display and resolution detection.
 2. **One-Click Code Fetching**: Discovers active codes from web sources and APIs with status breakdown (Pending vs Already Redeemed).
 3. **Interactive Code Management**: Filter by status (All, Pending, Redeemed), search codes, select/deselect, and manually add custom codes.
-4. **Safe Automation Controls**:
-   - **Start Auto Redemption**: Automatically enters codes into the game window with progress tracking.
-   - **Confirm each code**: Prompts for confirmation after each code before recording it as redeemed.
-   - **Space-bar fallback**: Allows submission using Space key when the Submit button is not calibrated.
-   - **Stop after 1 code**: Runs a single redemption test.
-   - **Emergency Stop**: Instantly cancel the redemption process at any time.
+4. **Automated Redemption**:
+   - **Start Auto Redemption**: Automatically enters selected codes into the game window with progress tracking.
+   - **Emergency Stop**: Instantly cancel or pause the redemption process at any time.
 5. **Visual Calibration & Target Inspection**:
    - **Inspect Target Positions**: Moves the mouse cursor across configured buttons without clicking.
    - **Calibration Window**: Calibrate buttons easily using an automated 3-second countdown while hovering the mouse over the game button.
@@ -43,11 +40,12 @@ dotnet run --project GUI\WhereWindsMeetItemCodeRedeemer\WhereWindsMeetItemCodeRe
 Or open `GUI\WhereWindsMeetItemCodeRedeemer\WhereWindsMeetItemCodeRedeemer.sln` in Visual Studio or JetBrains Rider and click Run.
 ### Requirements
 
-- Windows, because the automation uses the Windows User32 API.
-- Python 3.9 or newer.
+- **Administrator Privileges**: Required to detect and send external input to elevated game processes on Windows.
+- Windows 10 or Windows 11.
+- .NET 10 Runtime (for running the GUI).
+- Python 3.9 or newer (only if running the Python CLI).
 - **Where Winds Meet** running in a visible window.
 - Network access to the configured code sources.
-
 The project uses only Python standard-library modules; no package installation is required.
 
 ### Quick start
@@ -146,9 +144,6 @@ Edit the `sources` and `api_sources` arrays in `config.json`. HTML scraping acce
 3. **จัดการรายการโค้ดอย่างสะดวก**: กรองรายการตามสถานะ (ทั้งหมด, รอแลก, แลกแล้ว), ค้นหาโค้ด, เลือก/ยกเลิกการเลือก และเพิ่มโค้ดด้วยตนเอง
 4. **ระบบความปลอดภัยและการควบคุมการแลกโค้ด**:
    - **Start Auto Redemption**: กรอกโค้ดลงในเกมอัตโนมัติพร้อมแถบแสดงความคืบหน้า
-   - **Confirm each code**: แสดงกล่องข้อความถามยืนยันหลังส่งโค้ดแต่ละรายการก่อนบันทึกสถานะ
-   - **Space-bar fallback**: ใช้ปุ่ม Spacebar ในการกดยืนยันหากยังไม่ได้ปรับเทียบปุ่มส่ง
-   - **Stop after 1 code**: สั่งแลกเพียงโค้ดเดียวเพื่อทดสอบระบบ
    - **Emergency Stop**: ปุ่มหยุดการทำงานฉุกเฉินได้ทันทีตลอดเวลา
 5. **การปรับเทียบพิกัดและการตรวจสอบตำแหน่งเป้าหมาย**:
    - **Inspect Target Positions**: เลื่อนเมาส์ไปยังตำแหน่งปุ่มต่าง ๆ ในเกมโดยไม่คลิก เพื่อให้ผู้ใช้ตรวจดูความถูกต้อง
@@ -164,12 +159,12 @@ dotnet run --project GUI\WhereWindsMeetItemCodeRedeemer\WhereWindsMeetItemCodeRe
 หรือเปิดไฟล์ `GUI\WhereWindsMeetItemCodeRedeemer\WhereWindsMeetItemCodeRedeemer.sln` ด้วย Visual Studio หรือ JetBrains Rider แล้วกด Run
 ### สิ่งที่ต้องมี
 
-- Windows เนื่องจากระบบอัตโนมัติใช้ Windows User32 API
-- Python 3.9 ขึ้นไป
+- **สิทธิ์ผู้ดูแลระบบ (Administrator)**: จำเป็นต้องเรียกใช้ด้วยสิทธิ์ Administrator เพื่อตรวจหาและส่งอินพุตไปยังหน้าต่างเกม
+- Windows 10 หรือ Windows 11
+- .NET 10 Runtime (สำหรับเปิดโปรแกรม GUI)
+- Python 3.9 ขึ้นไป (เฉพาะกรณีที่ใช้งานผ่านบรรทัดคำสั่ง Python)
 - เปิด **Where Winds Meet** ไว้ในหน้าต่างที่มองเห็นได้
 - การเชื่อมต่อเครือข่ายไปยังแหล่งโค้ดที่กำหนดไว้
-
-โปรเจกต์นี้ใช้เฉพาะไลบรารีมาตรฐานของ Python จึงไม่ต้องติดตั้งแพ็กเกจเพิ่มเติม
 
 ### เริ่มใช้งานอย่างรวดเร็ว
 
