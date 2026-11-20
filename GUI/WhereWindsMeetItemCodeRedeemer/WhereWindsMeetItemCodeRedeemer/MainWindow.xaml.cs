@@ -37,7 +37,8 @@ public partial class MainWindow : Window
             _gameWindowService,
             _inputService,
             _calibrationService,
-            _updateService);
+            _updateService,
+            new EscapeKeyMonitor());
 
         DataContext = _viewModel;
 

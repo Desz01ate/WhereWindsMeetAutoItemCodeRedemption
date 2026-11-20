@@ -26,6 +26,7 @@ public class MainViewModel : BaseViewModel
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
     private readonly IUpdateService _updateService;
+    private readonly IStopHotkeyMonitor _stopHotkeyMonitor;
 
     private GameWindowInfo? _gameInfo;
     private bool _isGameRunning;
@@ -318,7 +319,8 @@ public class MainViewModel : BaseViewModel
         IGameWindowService gameWindowService,
         IInputSimulationService inputService,
         ICalibrationService calibrationService,
-        IUpdateService? updateService = null)
+        IUpdateService? updateService = null,
+        IStopHotkeyMonitor? stopHotkeyMonitor = null)
     {
         _configService = configService;
         _scraperService = scraperService;
@@ -326,6 +328,7 @@ public class MainViewModel : BaseViewModel
         _inputService = inputService;
         _calibrationService = calibrationService;
         _updateService = updateService ?? new UpdateService();
+        _stopHotkeyMonitor = stopHotkeyMonitor ?? new EscapeKeyMonitor();
 
         _filteredCodes = CollectionViewSource.GetDefaultView(_codes);
         _filteredCodes.Filter = FilterCodeItem;
@@ -567,12 +570,21 @@ public class MainViewModel : BaseViewModel
         }
 
         IsRedeeming = true;
-        _redemptionCts = new CancellationTokenSource();
+        var redemptionCts = new CancellationTokenSource();
+        _redemptionCts = redemptionCts;
         ProgressMax = toRedeem.Count;
         ProgressValue = 0;
 
         Log($"=== Starting Redemption Process for {toRedeem.Count} codes ===");
+        Log("Press Esc at any time to stop (works even while the game window is focused).");
         var logProgress = new Progress<string>(Log);
+
+        // Runs on a background thread: cancel first so the stop is not delayed by logging.
+        var stopHotkey = _stopHotkeyMonitor.Start(() =>
+        {
+            redemptionCts.Cancel();
+            Log("[Esc] Stop key pressed. Stopping redemption...");
+        });
 
         try
         {
@@ -616,10 +628,17 @@ public class MainViewModel : BaseViewModel
         }
         catch (OperationCanceledException)
         {
+            // The interrupted code never finished, so keep it available for the next run.
+            foreach (var item in toRedeem.Where(c => c.Status == CodeStatus.Processing))
+            {
+                item.Status = CodeStatus.Pending;
+            }
+
             Log("\n[Cancelled] Redemption process stopped by user.");
         }
         finally
         {
+            stopHotkey.Dispose();
             IsRedeeming = false;
             ProgressText = "Finished";
             _redemptionCts = null;
@@ -941,7 +960,11 @@ public class MainViewModel : BaseViewModel
         }
         else
         {
-            _logEntries.Add(timestamped);
+            // No WPF dispatcher (e.g. unit tests); the Esc monitor can log from a background thread.
+            lock (_logEntries)
+            {
+                _logEntries.Add(timestamped);
+            }
         }
     }
 
