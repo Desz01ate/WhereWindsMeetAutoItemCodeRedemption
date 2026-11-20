@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     private readonly IGameWindowService _gameWindowService;
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
+    private readonly IHotkeyMonitor _hotkeyMonitor;
     private readonly IUpdateService _updateService;
     private readonly MainViewModel _viewModel;
 
@@ -29,6 +30,7 @@ public partial class MainWindow : Window
         _gameWindowService = new GameWindowService();
         _inputService = new InputSimulationService(_gameWindowService);
         _calibrationService = new CalibrationService(_gameWindowService, _inputService);
+        _hotkeyMonitor = new HotkeyMonitor();
         _updateService = new UpdateService();
 
         _viewModel = new MainViewModel(
@@ -37,8 +39,8 @@ public partial class MainWindow : Window
             _gameWindowService,
             _inputService,
             _calibrationService,
-            _updateService,
-            new EscapeKeyMonitor());
+            _hotkeyMonitor,
+            _updateService);
 
         DataContext = _viewModel;
 

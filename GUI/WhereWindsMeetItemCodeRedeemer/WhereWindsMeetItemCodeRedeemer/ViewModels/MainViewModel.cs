@@ -25,8 +25,8 @@ public class MainViewModel : BaseViewModel
     private readonly IGameWindowService _gameWindowService;
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
+    private readonly IHotkeyMonitor _hotkeyMonitor;
     private readonly IUpdateService _updateService;
-    private readonly IStopHotkeyMonitor _stopHotkeyMonitor;
 
     private GameWindowInfo? _gameInfo;
     private bool _isGameRunning;
@@ -319,16 +319,16 @@ public class MainViewModel : BaseViewModel
         IGameWindowService gameWindowService,
         IInputSimulationService inputService,
         ICalibrationService calibrationService,
-        IUpdateService? updateService = null,
-        IStopHotkeyMonitor? stopHotkeyMonitor = null)
+        IHotkeyMonitor hotkeyMonitor,
+        IUpdateService? updateService = null)
     {
         _configService = configService;
         _scraperService = scraperService;
         _gameWindowService = gameWindowService;
         _inputService = inputService;
         _calibrationService = calibrationService;
+        _hotkeyMonitor = hotkeyMonitor;
         _updateService = updateService ?? new UpdateService();
-        _stopHotkeyMonitor = stopHotkeyMonitor ?? new EscapeKeyMonitor();
 
         _filteredCodes = CollectionViewSource.GetDefaultView(_codes);
         _filteredCodes.Filter = FilterCodeItem;
@@ -579,9 +579,13 @@ public class MainViewModel : BaseViewModel
         Log("Press Esc at any time to stop (works even while the game window is focused).");
         var logProgress = new Progress<string>(Log);
 
-        // Runs on a background thread: cancel first so the stop is not delayed by logging.
-        var stopHotkey = _stopHotkeyMonitor.Start(() =>
+        // Esc stops the run even while the game window has focus. The callback runs on a
+        // background thread: cancel first so the stop is not delayed by logging.
+        var stopHotkey = _hotkeyMonitor.Watch(NativeMethods.VK_ESCAPE, () =>
         {
+            if (redemptionCts.IsCancellationRequested)
+                return;
+
             redemptionCts.Cancel();
             Log("[Esc] Stop key pressed. Stopping redemption...");
         });

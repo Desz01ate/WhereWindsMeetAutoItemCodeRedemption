@@ -252,6 +252,7 @@ public class UpdateServiceTests
                 new MockGameWindowService(),
                 new MockInputSimulationService(),
                 new MockCalibrationService(),
+                new FakeHotkeyMonitor(),
                 mockUpdateService);
 
             Assert.Equal("v1.0.0", vm.CurrentVersionText);

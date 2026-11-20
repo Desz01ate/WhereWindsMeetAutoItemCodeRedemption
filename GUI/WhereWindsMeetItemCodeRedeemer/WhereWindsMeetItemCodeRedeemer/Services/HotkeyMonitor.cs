@@ -3,29 +3,32 @@ using WhereWindsMeetItemCodeRedeemer.Common;
 namespace WhereWindsMeetItemCodeRedeemer.Services;
 
 /// <summary>
-/// Detects the Esc key by polling the global key state, so it works even while the game
-/// window has focus (a WPF key binding only fires when this app's own window is active).
+/// Detects key presses by polling the global key state, so a hotkey works even while another
+/// window (such as the game) has focus. A WPF key binding only fires while this app's own
+/// window is active.
 /// </summary>
-public sealed class EscapeKeyMonitor : IStopHotkeyMonitor
+public sealed class HotkeyMonitor : IHotkeyMonitor
 {
     private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromMilliseconds(25);
 
-    private readonly Func<bool> _isKeyDown;
+    private readonly Func<int, bool> _isKeyDown;
     private readonly TimeSpan _pollInterval;
 
-    public EscapeKeyMonitor()
-        : this(() => (NativeMethods.GetAsyncKeyState(NativeMethods.VK_ESCAPE) & 0x8000) != 0, DefaultPollInterval)
+    public HotkeyMonitor()
+        : this(virtualKey => (NativeMethods.GetAsyncKeyState(virtualKey) & 0x8000) != 0, DefaultPollInterval)
     {
     }
 
-    public EscapeKeyMonitor(Func<bool> isKeyDown, TimeSpan pollInterval)
+    public HotkeyMonitor(Func<int, bool> isKeyDown, TimeSpan pollInterval)
     {
         _isKeyDown = isKeyDown ?? throw new ArgumentNullException(nameof(isKeyDown));
         _pollInterval = pollInterval > TimeSpan.Zero ? pollInterval : DefaultPollInterval;
     }
 
-    public IDisposable Start(Action onPressed)
+    public IDisposable Watch(int virtualKey, Action onPressed)
     {
+        if (virtualKey is < 0x01 or > 0xFE)
+            throw new ArgumentOutOfRangeException(nameof(virtualKey), virtualKey, "Expected a Win32 virtual-key code (0x01-0xFE).");
         ArgumentNullException.ThrowIfNull(onPressed);
 
         var cts = new CancellationTokenSource();
@@ -33,19 +36,19 @@ public sealed class EscapeKeyMonitor : IStopHotkeyMonitor
 
         _ = Task.Run(async () =>
         {
-            // A key that is already held when watching starts (for example Esc used to close
-            // a game menu just before clicking Start) must be released before it can trigger.
-            bool wasDown = _isKeyDown();
+            // A key that is already held when watching starts must be released first, so a
+            // press that began before the watch (for example Esc used to close a game menu
+            // just before clicking Start) is not reported.
+            bool wasDown = _isKeyDown(virtualKey);
 
             try
             {
                 while (!token.IsCancellationRequested)
                 {
-                    bool isDown = _isKeyDown();
-                    if (isDown && !wasDown)
+                    bool isDown = _isKeyDown(virtualKey);
+                    if (isDown && !wasDown && !token.IsCancellationRequested)
                     {
                         onPressed();
-                        return;
                     }
 
                     wasDown = isDown;

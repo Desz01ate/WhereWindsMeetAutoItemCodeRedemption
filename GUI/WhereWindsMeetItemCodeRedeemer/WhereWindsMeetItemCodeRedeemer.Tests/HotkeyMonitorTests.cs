@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.IO;
+using WhereWindsMeetItemCodeRedeemer.Common;
 using WhereWindsMeetItemCodeRedeemer.Models;
 using WhereWindsMeetItemCodeRedeemer.Services;
 using WhereWindsMeetItemCodeRedeemer.ViewModels;
@@ -6,36 +8,39 @@ using Xunit;
 
 namespace WhereWindsMeetItemCodeRedeemer.Tests;
 
-public class FakeKey
+public class FakeKeyboard
 {
-    private volatile bool _isDown;
+    private readonly ConcurrentDictionary<int, bool> _keys = new();
 
-    public bool IsDown => _isDown;
+    public bool IsDown(int virtualKey) => _keys.TryGetValue(virtualKey, out var down) && down;
 
-    public void Press() => _isDown = true;
+    public void Press(int virtualKey) => _keys[virtualKey] = true;
 
-    public void Release() => _isDown = false;
+    public void Release(int virtualKey) => _keys[virtualKey] = false;
 }
 
-public class FakeStopHotkeyMonitor : IStopHotkeyMonitor
+public class FakeHotkeyMonitor : IHotkeyMonitor
 {
     private Action? _onPressed;
 
+    public int? WatchedKey { get; private set; }
+
     public bool IsWatching => _onPressed != null;
 
-    public IDisposable Start(Action onPressed)
+    public IDisposable Watch(int virtualKey, Action onPressed)
     {
+        WatchedKey = virtualKey;
         _onPressed = onPressed;
-        return new Watch(this);
+        return new Watcher(this);
     }
 
     public void Press() => _onPressed?.Invoke();
 
-    private sealed class Watch : IDisposable
+    private sealed class Watcher : IDisposable
     {
-        private readonly FakeStopHotkeyMonitor _owner;
+        private readonly FakeHotkeyMonitor _owner;
 
-        public Watch(FakeStopHotkeyMonitor owner) => _owner = owner;
+        public Watcher(FakeHotkeyMonitor owner) => _owner = owner;
 
         public void Dispose() => _owner._onPressed = null;
     }
@@ -77,76 +82,110 @@ public class SlowInputSimulationService : IInputSimulationService
     }
 }
 
-public class EscapeKeyMonitorTests
+public class HotkeyMonitorTests
 {
+    private const int KeyA = 0x41;
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(5);
     private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan SettleTime = TimeSpan.FromMilliseconds(200);
 
-    [Fact]
-    public async Task Start_WhenKeyIsPressed_InvokesCallbackOnlyOnce()
+    private static async Task WaitUntilAsync(Func<bool> condition)
     {
-        var key = new FakeKey();
-        var monitor = new EscapeKeyMonitor(() => key.IsDown, PollInterval);
-        var calls = 0;
-        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        using var watch = monitor.Start(() =>
+        var deadline = DateTime.UtcNow + WaitLimit;
+        while (!condition())
         {
-            Interlocked.Increment(ref calls);
-            fired.TrySetResult();
-        });
-
-        await Task.Delay(SettleTime);
-        key.Press();
-        await fired.Task.WaitAsync(WaitLimit);
-
-        // Further presses after the first one must not call back again.
-        key.Release();
-        await Task.Delay(SettleTime);
-        key.Press();
-        await Task.Delay(SettleTime);
-
-        Assert.Equal(1, Volatile.Read(ref calls));
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("Condition was not met in time.");
+            await Task.Delay(10);
+        }
     }
 
     [Fact]
-    public async Task Start_WhenKeyAlreadyHeld_WaitsForReleaseAndNewPress()
+    public async Task Watch_ReportsEachNewPressOfTheWatchedKey()
     {
-        var key = new FakeKey();
-        key.Press();
-        var monitor = new EscapeKeyMonitor(() => key.IsDown, PollInterval);
-        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var keyboard = new FakeKeyboard();
+        var monitor = new HotkeyMonitor(keyboard.IsDown, PollInterval);
+        var presses = 0;
 
-        using var watch = monitor.Start(() => fired.TrySetResult());
+        using var watch = monitor.Watch(NativeMethods.VK_ESCAPE, () => Interlocked.Increment(ref presses));
+        await Task.Delay(SettleTime);
+
+        keyboard.Press(NativeMethods.VK_ESCAPE);
+        await WaitUntilAsync(() => Volatile.Read(ref presses) == 1);
+
+        // Holding the key down is a single press.
+        await Task.Delay(SettleTime);
+        Assert.Equal(1, Volatile.Read(ref presses));
+
+        keyboard.Release(NativeMethods.VK_ESCAPE);
+        await Task.Delay(SettleTime);
+        keyboard.Press(NativeMethods.VK_ESCAPE);
+        await WaitUntilAsync(() => Volatile.Read(ref presses) == 2);
+    }
+
+    [Fact]
+    public async Task Watch_IgnoresOtherKeys()
+    {
+        var keyboard = new FakeKeyboard();
+        var monitor = new HotkeyMonitor(keyboard.IsDown, PollInterval);
+        var presses = 0;
+
+        using var watch = monitor.Watch(NativeMethods.VK_ESCAPE, () => Interlocked.Increment(ref presses));
+        await Task.Delay(SettleTime);
+
+        keyboard.Press(KeyA);
+        await Task.Delay(SettleTime);
+
+        Assert.Equal(0, Volatile.Read(ref presses));
+    }
+
+    [Fact]
+    public async Task Watch_WhenKeyAlreadyHeld_WaitsForReleaseAndNewPress()
+    {
+        var keyboard = new FakeKeyboard();
+        keyboard.Press(KeyA);
+        var monitor = new HotkeyMonitor(keyboard.IsDown, PollInterval);
+        var presses = 0;
+
+        using var watch = monitor.Watch(KeyA, () => Interlocked.Increment(ref presses));
 
         await Task.Delay(SettleTime);
-        Assert.False(fired.Task.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref presses));
 
-        key.Release();
+        keyboard.Release(KeyA);
         await Task.Delay(SettleTime);
-        Assert.False(fired.Task.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref presses));
 
-        key.Press();
-        await fired.Task.WaitAsync(WaitLimit);
+        keyboard.Press(KeyA);
+        await WaitUntilAsync(() => Volatile.Read(ref presses) == 1);
     }
 
     [Fact]
     public async Task Dispose_StopsWatching()
     {
-        var key = new FakeKey();
-        var monitor = new EscapeKeyMonitor(() => key.IsDown, PollInterval);
-        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var keyboard = new FakeKeyboard();
+        var monitor = new HotkeyMonitor(keyboard.IsDown, PollInterval);
+        var presses = 0;
 
-        var watch = monitor.Start(() => fired.TrySetResult());
+        var watch = monitor.Watch(NativeMethods.VK_ESCAPE, () => Interlocked.Increment(ref presses));
         await Task.Delay(SettleTime);
         watch.Dispose();
         watch.Dispose(); // a second Dispose must be harmless
 
-        key.Press();
+        keyboard.Press(NativeMethods.VK_ESCAPE);
         await Task.Delay(SettleTime);
 
-        Assert.False(fired.Task.IsCompleted);
+        Assert.Equal(0, Volatile.Read(ref presses));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(0xFF)]
+    public void Watch_WithInvalidVirtualKey_Throws(int virtualKey)
+    {
+        var monitor = new HotkeyMonitor(_ => false, PollInterval);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => monitor.Watch(virtualKey, () => { }));
     }
 }
 
@@ -155,7 +194,7 @@ public class StopHotkeyViewModelTests
     private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(5);
 
     [Fact]
-    public async Task StartRedemption_WhenStopHotkeyPressed_StopsAndKeepsCodesPending()
+    public async Task StartRedemption_WhenEscPressed_StopsAndKeepsCodesPending()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "WWM_VMTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -170,15 +209,15 @@ public class StopHotkeyViewModelTests
             ui.CancelButton = new NormalizedPoint(0.45, 0.65);
 
             var input = new SlowInputSimulationService();
-            var hotkey = new FakeStopHotkeyMonitor();
+            var hotkey = new FakeHotkeyMonitor();
             var vm = new MainViewModel(
                 configService,
                 new CodeScraperService(),
                 new FoundGameWindowService(),
                 input,
                 new MockCalibrationService(),
-                new MockUpdateService(),
-                hotkey);
+                hotkey,
+                new MockUpdateService());
 
             vm.Codes.Add(new RedeemCodeItem { Code = "FIRSTCODE", Source = "Test", Status = CodeStatus.Pending, IsSelected = true });
             vm.Codes.Add(new RedeemCodeItem { Code = "SECONDCODE", Source = "Test", Status = CodeStatus.Pending, IsSelected = true });
@@ -188,8 +227,10 @@ public class StopHotkeyViewModelTests
 
             Assert.True(vm.IsRedeeming);
             Assert.True(hotkey.IsWatching);
+            Assert.Equal((int?)NativeMethods.VK_ESCAPE, hotkey.WatchedKey);
 
             hotkey.Press();
+            hotkey.Press(); // a second press while stopping must be harmless
             await run.WaitAsync(WaitLimit);
 
             Assert.False(vm.IsRedeeming);
@@ -197,7 +238,7 @@ public class StopHotkeyViewModelTests
             Assert.Equal(1, input.RedeemCalls);
             Assert.All(vm.Codes, item => Assert.Equal(CodeStatus.Pending, item.Status));
             Assert.Empty(configService.LoadRedeemedCodes());
-            Assert.Contains(vm.LogEntries, line => line.Contains("[Esc]"));
+            Assert.Single(vm.LogEntries, line => line.Contains("[Esc]"));
             Assert.Contains(vm.LogEntries, line => line.Contains("[Cancelled]"));
         }
         finally
