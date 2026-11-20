@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -23,6 +25,7 @@ public class MainViewModel : BaseViewModel
     private readonly IGameWindowService _gameWindowService;
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
+    private readonly IUpdateService _updateService;
 
     private GameWindowInfo? _gameInfo;
     private bool _isGameRunning;
@@ -43,9 +46,19 @@ public class MainViewModel : BaseViewModel
     private int _progressMax;
     private string _progressText = string.Empty;
 
+    private bool _isCheckingForUpdate;
+    private bool _isDownloadingUpdate;
+    private bool _hasUpdateAvailable;
+    private UpdateCheckResult? _availableUpdate;
+    private double _updateDownloadProgress;
+    private string _updateDownloadStatusText = string.Empty;
+    private string? _downloadedUpdatePath;
+    private CancellationTokenSource? _updateDownloadCts;
+
     private ObservableCollection<string> _logEntries = new();
 
     public event Action? RequestOpenCalibration;
+    public event Action? RequestApplicationShutdown;
 
     public GameWindowInfo? GameInfo
     {
@@ -173,6 +186,103 @@ public class MainViewModel : BaseViewModel
     public AppConfig Config => _configService.CurrentConfig;
     public bool IsFullyCalibrated => _configService.CurrentConfig.Ui.IsFullyCalibrated;
 
+    public string CurrentVersionText => $"v{UpdateService.FormatVersion(_updateService.CurrentVersion)}";
+
+    public bool IsCheckingForUpdate
+    {
+        get => _isCheckingForUpdate;
+        set
+        {
+            if (SetField(ref _isCheckingForUpdate, value))
+            {
+                OnPropertyChanged(nameof(CanCheckForUpdates));
+                OnPropertyChanged(nameof(CheckForUpdatesButtonText));
+            }
+        }
+    }
+
+    public bool CanCheckForUpdates => !IsCheckingForUpdate && !IsDownloadingUpdate;
+    public string CheckForUpdatesButtonText => IsCheckingForUpdate ? "Checking..." : "Check for Updates";
+
+    public bool IsDownloadingUpdate
+    {
+        get => _isDownloadingUpdate;
+        set
+        {
+            if (SetField(ref _isDownloadingUpdate, value))
+            {
+                OnPropertyChanged(nameof(CanCheckForUpdates));
+                OnPropertyChanged(nameof(IsUpdateBannerVisible));
+                OnPropertyChanged(nameof(CanDownloadUpdate));
+            }
+        }
+    }
+
+    public bool HasUpdateAvailable
+    {
+        get => _hasUpdateAvailable;
+        set
+        {
+            if (SetField(ref _hasUpdateAvailable, value))
+            {
+                OnPropertyChanged(nameof(IsUpdateBannerVisible));
+                OnPropertyChanged(nameof(CanDownloadUpdate));
+            }
+        }
+    }
+
+    public UpdateCheckResult? AvailableUpdate
+    {
+        get => _availableUpdate;
+        set
+        {
+            if (SetField(ref _availableUpdate, value))
+            {
+                OnPropertyChanged(nameof(UpdateBannerTitle));
+                OnPropertyChanged(nameof(UpdateBannerSubtitle));
+                OnPropertyChanged(nameof(CanDownloadUpdate));
+            }
+        }
+    }
+
+    public double UpdateDownloadProgress
+    {
+        get => _updateDownloadProgress;
+        set => SetField(ref _updateDownloadProgress, value);
+    }
+
+    public string UpdateDownloadStatusText
+    {
+        get => _updateDownloadStatusText;
+        set => SetField(ref _updateDownloadStatusText, value);
+    }
+
+    public string? DownloadedUpdatePath
+    {
+        get => _downloadedUpdatePath;
+        set
+        {
+            if (SetField(ref _downloadedUpdatePath, value))
+            {
+                OnPropertyChanged(nameof(IsUpdateDownloaded));
+                OnPropertyChanged(nameof(IsUpdateBannerVisible));
+                OnPropertyChanged(nameof(CanDownloadUpdate));
+            }
+        }
+    }
+
+    public bool IsUpdateDownloaded => !string.IsNullOrEmpty(DownloadedUpdatePath);
+    public bool IsUpdateBannerVisible => HasUpdateAvailable || IsDownloadingUpdate || IsUpdateDownloaded;
+    public bool CanDownloadUpdate => HasUpdateAvailable && !IsDownloadingUpdate && !IsUpdateDownloaded && AvailableUpdate?.Asset != null;
+
+    public string UpdateBannerTitle => AvailableUpdate == null
+        ? string.Empty
+        : $"Update Available: {AvailableUpdate.TagName} (Current: {CurrentVersionText})";
+
+    public string UpdateBannerSubtitle => AvailableUpdate?.Asset != null
+        ? $"{AvailableUpdate.Asset.Name} ({AvailableUpdate.Asset.FormattedSize})"
+        : "Download available on GitHub Releases";
+
     public void RefreshCalibrationStatus()
     {
         OnPropertyChanged(nameof(IsFullyCalibrated));
@@ -194,19 +304,28 @@ public class MainViewModel : BaseViewModel
     public ICommand InspectTargetsCommand { get; }
     public ICommand OpenCalibrationCommand { get; }
     public ICommand ClearLogCommand { get; }
+    public ICommand CheckForUpdatesCommand { get; }
+    public ICommand DownloadUpdateCommand { get; }
+    public ICommand CancelUpdateDownloadCommand { get; }
+    public ICommand InstallUpdateCommand { get; }
+    public ICommand OpenUpdateFolderCommand { get; }
+    public ICommand OpenReleaseNotesCommand { get; }
+    public ICommand DismissUpdateBannerCommand { get; }
 
     public MainViewModel(
         IConfigService configService,
         ICodeScraperService scraperService,
         IGameWindowService gameWindowService,
         IInputSimulationService inputService,
-        ICalibrationService calibrationService)
+        ICalibrationService calibrationService,
+        IUpdateService? updateService = null)
     {
         _configService = configService;
         _scraperService = scraperService;
         _gameWindowService = gameWindowService;
         _inputService = inputService;
         _calibrationService = calibrationService;
+        _updateService = updateService ?? new UpdateService();
 
         _filteredCodes = CollectionViewSource.GetDefaultView(_codes);
         _filteredCodes.Filter = FilterCodeItem;
@@ -225,8 +344,15 @@ public class MainViewModel : BaseViewModel
         InspectTargetsCommand = new AsyncRelayCommand(InspectTargetsAsync);
         OpenCalibrationCommand = new RelayCommand(() => RequestOpenCalibration?.Invoke());
         ClearLogCommand = new RelayCommand(_logEntries.Clear);
+        CheckForUpdatesCommand = new AsyncRelayCommand(() => CheckForUpdatesAsync(silent: false));
+        DownloadUpdateCommand = new AsyncRelayCommand(DownloadUpdateAsync);
+        CancelUpdateDownloadCommand = new RelayCommand(CancelUpdateDownload);
+        InstallUpdateCommand = new RelayCommand(InstallUpdate);
+        OpenUpdateFolderCommand = new RelayCommand(OpenUpdateFolder);
+        OpenReleaseNotesCommand = new RelayCommand(OpenReleaseNotes);
+        DismissUpdateBannerCommand = new RelayCommand(DismissUpdateBanner);
 
-        Log($"Application loaded. Config path: {_configService.ConfigFilePath}");
+        Log($"Application loaded ({CurrentVersionText}). Config path: {_configService.ConfigFilePath}");
         Log($"State file path: {_configService.StateFilePath}");
 
         // Initial game detection
@@ -546,6 +672,257 @@ public class MainViewModel : BaseViewModel
             IsBusy = false;
             BusyStatusText = string.Empty;
         }
+    }
+
+    public async Task CheckForUpdatesAsync(bool silent = false)
+    {
+        if (IsCheckingForUpdate || IsDownloadingUpdate) return;
+
+        IsCheckingForUpdate = true;
+        if (!silent)
+        {
+            Log($"Checking GitHub Releases for updates (current: {CurrentVersionText})...");
+        }
+
+        try
+        {
+            var result = await _updateService.CheckForUpdateAsync();
+
+            if (!string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                Log($"[Update] {result.ErrorMessage}");
+                if (!silent && Application.Current != null)
+                {
+                    MessageBox.Show(
+                        result.ErrorMessage,
+                        "Check for Updates",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                return;
+            }
+
+            if (result.IsUpdateAvailable)
+            {
+                AvailableUpdate = result;
+                HasUpdateAvailable = true;
+                DownloadedUpdatePath = null;
+                UpdateDownloadProgress = 0;
+                UpdateDownloadStatusText = string.Empty;
+
+                var assetDesc = result.Asset != null
+                    ? $"{result.Asset.Name} ({result.Asset.FormattedSize})"
+                    : "no downloadable asset attached";
+                Log($"[Update] New version available: {result.TagName} ({assetDesc}).");
+            }
+            else
+            {
+                AvailableUpdate = result;
+                HasUpdateAvailable = false;
+
+                var latestStr = result.LatestVersion != null
+                    ? $"v{UpdateService.FormatVersion(result.LatestVersion)}"
+                    : CurrentVersionText;
+                if (!silent)
+                {
+                    Log($"[Update] You are up to date (current: {CurrentVersionText}, latest: {latestStr}).");
+                    if (Application.Current != null)
+                    {
+                        MessageBox.Show(
+                            $"You are running the latest version ({CurrentVersionText}).",
+                            "Up to Date",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"[Update] Failed to check for updates: {ex.Message}");
+            if (!silent && Application.Current != null)
+            {
+                MessageBox.Show(
+                    $"Failed to check for updates:\n{ex.Message}",
+                    "Update Check Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+        finally
+        {
+            IsCheckingForUpdate = false;
+        }
+    }
+
+    public async Task DownloadUpdateAsync()
+    {
+        if (IsDownloadingUpdate || AvailableUpdate?.Asset == null) return;
+
+        var asset = AvailableUpdate.Asset;
+        IsDownloadingUpdate = true;
+        DownloadedUpdatePath = null;
+        UpdateDownloadProgress = 0;
+        UpdateDownloadStatusText = $"Downloading {asset.Name}...";
+        _updateDownloadCts = new CancellationTokenSource();
+
+        Log($"[Update] Downloading {asset.Name} ({asset.FormattedSize})...");
+
+        var progress = new Progress<DownloadProgress>(p =>
+        {
+            if (p.Percentage.HasValue)
+            {
+                UpdateDownloadProgress = p.Percentage.Value;
+                UpdateDownloadStatusText =
+                    $"Downloading {asset.Name}: {p.Percentage.Value:F0}% ({ReleaseAssetInfo.FormatBytes(p.BytesDownloaded)} / {ReleaseAssetInfo.FormatBytes(p.TotalBytes!.Value)})";
+            }
+            else
+            {
+                UpdateDownloadStatusText =
+                    $"Downloading {asset.Name}: {ReleaseAssetInfo.FormatBytes(p.BytesDownloaded)}";
+            }
+        });
+
+        try
+        {
+            var downloadedPath = await _updateService.DownloadUpdateAsync(
+                asset,
+                destinationDirectory: null,
+                progress: progress,
+                cancellationToken: _updateDownloadCts.Token);
+
+            DownloadedUpdatePath = downloadedPath;
+            UpdateDownloadProgress = 100;
+            UpdateDownloadStatusText = $"Downloaded {asset.Name}. Ready to install.";
+            Log($"[Update] Artifact downloaded to: {downloadedPath}");
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateDownloadProgress = 0;
+            UpdateDownloadStatusText = string.Empty;
+            Log("[Update] Download cancelled by user.");
+        }
+        catch (Exception ex)
+        {
+            UpdateDownloadProgress = 0;
+            UpdateDownloadStatusText = string.Empty;
+            Log($"[Update] Download failed: {ex.Message}");
+            if (Application.Current != null)
+            {
+                MessageBox.Show(
+                    $"Failed to download update artifact:\n{ex.Message}",
+                    "Download Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+        finally
+        {
+            IsDownloadingUpdate = false;
+            _updateDownloadCts?.Dispose();
+            _updateDownloadCts = null;
+        }
+    }
+
+    public void CancelUpdateDownload()
+    {
+        if (IsDownloadingUpdate)
+        {
+            _updateDownloadCts?.Cancel();
+        }
+    }
+
+    public void InstallUpdate()
+    {
+        if (string.IsNullOrEmpty(DownloadedUpdatePath) || !File.Exists(DownloadedUpdatePath))
+        {
+            Log("[Update] Downloaded artifact not found.");
+            return;
+        }
+
+        if (Application.Current != null)
+        {
+            var confirm = MessageBox.Show(
+                "The application will close, extract the new version (preserving your config.json and redeemed_codes.json), and restart automatically.\n\nProceed with installation?",
+                "Install Update & Restart",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (confirm != MessageBoxResult.Yes)
+                return;
+        }
+
+        try
+        {
+            Log("[Update] Launching updater and restarting application...");
+            if (_updateService.LaunchUpdaterAndApply(DownloadedUpdatePath))
+            {
+                RequestApplicationShutdown?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"[Update] Failed to apply update: {ex.Message}");
+            if (Application.Current != null)
+            {
+                MessageBox.Show(
+                    $"Failed to launch updater:\n{ex.Message}\n\nYou can still extract the downloaded archive manually.",
+                    "Install Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+    }
+
+    public void OpenUpdateFolder()
+    {
+        if (string.IsNullOrEmpty(DownloadedUpdatePath)) return;
+
+        var dir = Path.GetDirectoryName(DownloadedUpdatePath);
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{DownloadedUpdatePath}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Log($"[Update] Could not open folder: {ex.Message}");
+        }
+    }
+
+    public void OpenReleaseNotes()
+    {
+        var url = !string.IsNullOrWhiteSpace(AvailableUpdate?.HtmlUrl)
+            ? AvailableUpdate.HtmlUrl
+            : _updateService.ReleasesPageUrl;
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Log($"[Update] Could not open release page: {ex.Message}");
+        }
+    }
+
+    public void DismissUpdateBanner()
+    {
+        if (IsDownloadingUpdate) return;
+        HasUpdateAvailable = false;
+        DownloadedUpdatePath = null;
+        UpdateDownloadProgress = 0;
+        UpdateDownloadStatusText = string.Empty;
     }
 
     private void Log(string message)

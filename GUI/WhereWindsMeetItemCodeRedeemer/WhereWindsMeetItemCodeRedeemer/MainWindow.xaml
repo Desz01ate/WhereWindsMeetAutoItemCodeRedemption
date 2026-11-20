@@ -154,6 +154,8 @@
         <Grid.RowDefinitions>
             <!-- Top Header & Game Status -->
             <RowDefinition Height="Auto"/>
+            <!-- Update Notification Banner (collapsed unless update available/downloading) -->
+            <RowDefinition Height="Auto"/>
             <!-- Action Bar & Controls -->
             <RowDefinition Height="Auto"/>
             <!-- Main Content Area: Codes List & Activity Log -->
@@ -171,41 +173,113 @@
 
             <!-- App Title & Description -->
             <StackPanel Grid.Column="0">
-                <TextBlock Text="Where Winds Meet Item Code Redeemer" 
-                           FontSize="22" FontWeight="Bold" Foreground="#F8FAFC"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Where Winds Meet Item Code Redeemer" 
+                               FontSize="22" FontWeight="Bold" Foreground="#F8FAFC" VerticalAlignment="Center"/>
+                    <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="10"
+                            Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentVersionText}" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8"/>
+                    </Border>
+                </StackPanel>
                 <TextBlock Text="Discover active redemption codes and enter them automatically into your game window." 
                            FontSize="13" Foreground="#94A3B8" Margin="0,3,0,0"/>
             </StackPanel>
 
-            <!-- Game Window Detection Pill -->
-            <Border Grid.Column="1" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="20" Padding="12,6" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Status Dot -->
-                    <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
-                        <Ellipse.Style>
-                            <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="#EF4444"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsGameRunning}" Value="True">
-                                        <Setter Property="Fill" Value="#10B981"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Ellipse.Style>
-                    </Ellipse>
+            <!-- Right Header: Check for Updates + Game Window Detection Pill -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="{Binding CheckForUpdatesButtonText}" Style="{StaticResource SecondaryButtonStyle}"
+                        Padding="10,6" FontSize="12" Margin="0,0,10,0"
+                        Command="{Binding CheckForUpdatesCommand}" IsEnabled="{Binding CanCheckForUpdates}"
+                        ToolTip="Check GitHub Releases for a newer version of this application."/>
 
-                    <!-- Status Text -->
-                    <TextBlock Text="{Binding GameStatusText}" FontWeight="SemiBold" FontSize="12" Foreground="#F1F5F9" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Border Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="20" Padding="12,6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Status Dot -->
+                        <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="#EF4444"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsGameRunning}" Value="True">
+                                            <Setter Property="Fill" Value="#10B981"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
 
-                    <!-- Refresh Button -->
-                    <Button Content="Refresh" Style="{StaticResource SecondaryButtonStyle}" Padding="8,3" FontSize="11"
-                            Command="{Binding RefreshGameStatusCommand}" IsEnabled="{Binding CanOperate}"/>
-                </StackPanel>
-            </Border>
+                        <!-- Status Text -->
+                        <TextBlock Text="{Binding GameStatusText}" FontWeight="SemiBold" FontSize="12" Foreground="#F1F5F9" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                        <!-- Refresh Button -->
+                        <Button Content="Refresh" Style="{StaticResource SecondaryButtonStyle}" Padding="8,3" FontSize="11"
+                                Command="{Binding RefreshGameStatusCommand}" IsEnabled="{Binding CanOperate}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Grid>
 
+        <!-- UPDATE NOTIFICATION BANNER -->
+        <Border Grid.Row="1" Background="#172554" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="8"
+                Padding="14,10" Margin="0,0,0,14"
+                Visibility="{Binding IsUpdateBannerVisible, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Update info & download progress -->
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
+                    <TextBlock Text="{Binding UpdateBannerTitle}" FontSize="14" FontWeight="Bold" Foreground="#F8FAFC"/>
+                    <TextBlock Text="{Binding UpdateBannerSubtitle}" FontSize="12" Foreground="#93C5FD" Margin="0,2,0,0"
+                               Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource InverseBoolToVis}}"/>
+
+                    <!-- Download progress bar & status -->
+                    <StackPanel Margin="0,6,0,0" Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding UpdateDownloadStatusText}" FontSize="12" Foreground="#BFDBFE" Margin="0,0,0,4"/>
+                        <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding UpdateDownloadProgress}"
+                                     Foreground="#38BDF8" Background="#0F172A" BorderThickness="0"/>
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding UpdateDownloadStatusText}" FontSize="12" Foreground="#34D399" FontWeight="SemiBold" Margin="0,4,0,0"
+                               Visibility="{Binding IsUpdateDownloaded, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+
+                <!-- Right: Action buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Download Update" Style="{StaticResource RoundedButtonStyle}" Margin="0,0,8,0"
+                            Command="{Binding DownloadUpdateCommand}"
+                            Visibility="{Binding CanDownloadUpdate, Converter={StaticResource BoolToVis}}"/>
+
+                    <Button Content="Cancel" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            Command="{Binding CancelUpdateDownloadCommand}"
+                            Visibility="{Binding IsDownloadingUpdate, Converter={StaticResource BoolToVis}}"/>
+
+                    <Button Content="Install &amp; Restart" Style="{StaticResource RoundedButtonStyle}" Background="#10B981" Margin="0,0,8,0"
+                            Command="{Binding InstallUpdateCommand}"
+                            Visibility="{Binding IsUpdateDownloaded, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Extract the downloaded artifact (preserving config.json and redeemed_codes.json) and restart."/>
+
+                    <Button Content="Open Folder" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            Command="{Binding OpenUpdateFolderCommand}"
+                            Visibility="{Binding IsUpdateDownloaded, Converter={StaticResource BoolToVis}}"
+                            ToolTip="Show the downloaded update archive in File Explorer."/>
+
+                    <Button Content="Release Notes" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0"
+                            Command="{Binding OpenReleaseNotesCommand}"
+                            ToolTip="Open the GitHub Release page in your browser."/>
+
+                    <Button Content="✕" Style="{StaticResource SecondaryButtonStyle}" Padding="8,6"
+                            Command="{Binding DismissUpdateBannerCommand}"
+                            IsEnabled="{Binding IsDownloadingUpdate, Converter={StaticResource InverseBooleanConverter}}"
+                            ToolTip="Dismiss update notification"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- ACTION BAR & CONTROLS -->
-        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
+        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -250,7 +324,7 @@
         </Border>
 
         <!-- MAIN CONTENT AREA -->
-        <Grid Grid.Row="2" Margin="0,0,0,14">
+        <Grid Grid.Row="3" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
                 <!-- Codes List (70%) -->
                 <ColumnDefinition Width="7*"/>
@@ -467,7 +541,7 @@
         </Grid>
 
         <!-- BOTTOM STATUS & PROGRESS BAR -->
-        <Border Grid.Row="3" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12,8">
+        <Border Grid.Row="4" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12,8">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>

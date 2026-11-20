@@ -34,6 +34,17 @@ jobs:
       - name: Run unit tests
         run: dotnet test GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.sln -c Release --no-restore --verbosity normal
 
+      - name: Determine release version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $ver = "${{ github.ref_name }}".TrimStart('v', 'V')
+          } else {
+            $ver = "1.0.0"
+          }
+          echo "value=$ver" >> $env:GITHUB_OUTPUT
+
       - name: Publish Self-Contained Application
         run: |
           dotnet publish GUI/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer/WhereWindsMeetItemCodeRedeemer.csproj `
@@ -41,6 +52,7 @@ jobs:
             -r win-x64 `
             --self-contained true `
             -p:PublishSingleFile=true `
+            -p:Version=${{ steps.version.outputs.value }} `
             -o ./publish/self-contained
 
       - name: Publish Framework-Dependent Application
@@ -49,6 +61,7 @@ jobs:
             -c Release `
             -r win-x64 `
             --self-contained false `
+            -p:Version=${{ steps.version.outputs.value }} `
             -o ./publish/framework-dependent
 
       - name: Prepare distribution packages
