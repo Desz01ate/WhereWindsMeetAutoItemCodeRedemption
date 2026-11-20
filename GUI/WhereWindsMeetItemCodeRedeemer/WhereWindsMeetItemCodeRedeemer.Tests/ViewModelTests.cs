@@ -51,7 +51,7 @@ public class ViewModelTests
             var inputService = new MockInputSimulationService();
             var calService = new MockCalibrationService();
 
-            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService);
+            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService, new FakeHotkeyMonitor());
 
             // Add test codes
             vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE1", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true });
@@ -110,7 +110,7 @@ public class ViewModelTests
             var inputService = new MockInputSimulationService();
             var calService = new MockCalibrationService();
 
-            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService);
+            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService, new FakeHotkeyMonitor());
 
             vm.ManualCodeInput = "  my_new_code  ";
             vm.AddManualCodeCommand.Execute(null);
@@ -168,7 +168,8 @@ public class ViewModelTests
                 new CodeScraperService(),
                 new MockGameWindowService(),
                 new MockInputSimulationService(),
-                new MockCalibrationService());
+                new MockCalibrationService(),
+                new FakeHotkeyMonitor());
 
             Assert.False(vm.IsFullyCalibrated);
         }

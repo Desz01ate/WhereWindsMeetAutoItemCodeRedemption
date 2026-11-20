@@ -25,7 +25,7 @@ A standalone Windows GUI application implemented natively in C# (.NET 10 WPF) lo
 3. **Interactive Code Management**: Filter by status (All, Pending, Redeemed), search codes, select/deselect, and manually add custom codes.
 4. **Automated Redemption**:
    - **Start Auto Redemption**: Automatically enters selected codes into the game window with progress tracking.
-   - **Emergency Stop**: Instantly cancel or pause the redemption process at any time.
+   - **Emergency Stop**: Instantly cancel the redemption process at any time by clicking **STOP Redemption** or pressing **Esc** (the Esc shortcut works even while the game window is focused).
 5. **Visual Calibration & Target Inspection**:
    - **Inspect Target Positions**: Moves the mouse cursor across configured buttons without clicking.
    - **Calibration Window**: Calibrate buttons easily using an automated 3-second countdown while hovering the mouse over the game button.
@@ -144,7 +144,7 @@ Edit the `sources` and `api_sources` arrays in `config.json`. HTML scraping acce
 3. **จัดการรายการโค้ดอย่างสะดวก**: กรองรายการตามสถานะ (ทั้งหมด, รอแลก, แลกแล้ว), ค้นหาโค้ด, เลือก/ยกเลิกการเลือก และเพิ่มโค้ดด้วยตนเอง
 4. **ระบบความปลอดภัยและการควบคุมการแลกโค้ด**:
    - **Start Auto Redemption**: กรอกโค้ดลงในเกมอัตโนมัติพร้อมแถบแสดงความคืบหน้า
-   - **Emergency Stop**: ปุ่มหยุดการทำงานฉุกเฉินได้ทันทีตลอดเวลา
+   - **Emergency Stop**: หยุดการแลกโค้ดได้ทันทีตลอดเวลา โดยกดปุ่ม **STOP Redemption** หรือกดปุ่ม **Esc** บนคีย์บอร์ด (ปุ่ม Esc ใช้ได้แม้หน้าต่างเกมจะอยู่ด้านหน้า)
 5. **การปรับเทียบพิกัดและการตรวจสอบตำแหน่งเป้าหมาย**:
    - **Inspect Target Positions**: เลื่อนเมาส์ไปยังตำแหน่งปุ่มต่าง ๆ ในเกมโดยไม่คลิก เพื่อให้ผู้ใช้ตรวจดูความถูกต้อง
    - **Calibration Window**: ปรับเทียบตำแหน่งปุ่มได้ง่าย ๆ โดยระบบจะนับถอยหลัง 3 วินาทีเพื่อให้เลื่อนเมาส์ไปชี้ที่ปุ่มในเกม

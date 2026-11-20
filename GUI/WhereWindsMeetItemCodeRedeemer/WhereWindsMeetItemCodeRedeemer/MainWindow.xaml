@@ -315,9 +315,9 @@
                             Visibility="{Binding IsRedeeming, Converter={StaticResource InverseBoolToVis}}"/>
 
                     <!-- Stop Button (Visible ONLY when redeeming, in place of Start button) -->
-                    <Button Content="STOP Redemption" Style="{StaticResource StopButtonStyle}"
+                    <Button Content="STOP Redemption (Esc)" Style="{StaticResource StopButtonStyle}"
                             Command="{Binding StopRedemptionCommand}"
-                            ToolTip="Cancel the ongoing redemption process immediately."
+                            ToolTip="Cancel the ongoing redemption process immediately. Shortcut: press Esc (works even while the game window is focused)."
                             Visibility="{Binding IsRedeeming, Converter={StaticResource BoolToVis}}"/>
                 </Grid>
             </Grid>
