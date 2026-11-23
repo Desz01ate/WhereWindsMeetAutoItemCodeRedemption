@@ -21,7 +21,7 @@ A standalone Windows GUI application implemented natively in C# (.NET 10 WPF) lo
 #### GUI Capabilities:
 
 1. **Automatic Game Detection**: Detects `wwm.exe` running in a visible window with real-time status display and resolution detection.
-2. **One-Click Code Fetching**: Discovers active codes from web sources and APIs with status breakdown (Pending vs Already Redeemed).
+2. **One-Click Code Fetching**: Discovers active codes from web sources and APIs with status breakdown (Pending vs Already Redeemed). A **Source** switch next to the button chooses between the default sources in `config.json` and the community-verified list at [codes.yar.gg](https://codes.yar.gg/) only.
 3. **Interactive Code Management**: Filter by status (All, Pending, Redeemed), search codes, select/deselect, and manually add custom codes.
 4. **Automated Redemption**:
    - **Start Auto Redemption**: Automatically enters selected codes into the game window with progress tracking.
@@ -140,7 +140,7 @@ Edit the `sources` and `api_sources` arrays in `config.json`. HTML scraping acce
 #### ความสามารถของ GUI:
 
 1. **ตรวจหาหน้าต่างเกมอัตโนมัติ**: ตรวจหาโปรเซส `wwm.exe` ที่เปิดอยู่ในหน้าต่างที่มองเห็นได้ พร้อมแสดงสถานะและความละเอียดหน้าจอแบบเรียลไทม์
-2. **ดึงโค้ดล่าสุดในคลิกเดียว**: ค้นหาโค้ดที่ยังใช้งานได้จากหน้าเว็บและ API พร้อมจำแนกสถานะ (รอแลก หรือแลกไปแล้ว)
+2. **ดึงโค้ดล่าสุดในคลิกเดียว**: ค้นหาโค้ดที่ยังใช้งานได้จากหน้าเว็บและ API พร้อมจำแนกสถานะ (รอแลก หรือแลกไปแล้ว) มีตัวเลือก **Source** ข้างปุ่ม ให้เลือกดึงจากแหล่งเริ่มต้นใน `config.json` หรือดึงจาก [codes.yar.gg](https://codes.yar.gg/) ซึ่งเป็นรายการที่ชุมชนช่วยตรวจสอบอย่างเดียว
 3. **จัดการรายการโค้ดอย่างสะดวก**: กรองรายการตามสถานะ (ทั้งหมด, รอแลก, แลกแล้ว), ค้นหาโค้ด, เลือก/ยกเลิกการเลือก และเพิ่มโค้ดด้วยตนเอง
 4. **ระบบความปลอดภัยและการควบคุมการแลกโค้ด**:
    - **Start Auto Redemption**: กรอกโค้ดลงในเกมอัตโนมัติพร้อมแถบแสดงความคืบหน้า

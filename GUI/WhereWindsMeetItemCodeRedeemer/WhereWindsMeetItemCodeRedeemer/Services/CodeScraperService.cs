@@ -9,6 +9,11 @@ namespace WhereWindsMeetItemCodeRedeemer.Services;
 
 public class CodeScraperService : ICodeScraperService
 {
+    /// <summary>
+    /// Community-verified code list (https://codes.yar.gg). Its robots.txt explicitly allows /api/codes.
+    /// </summary>
+    public const string CodesYarGgApiUrl = "https://codes.yar.gg/api/codes";
+
     private static readonly Regex CodePattern = new(@"\b[A-Z0-9]{6,32}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ExactCodePattern = new(@"^[A-Z0-9]{6,32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex AttributePattern = new(@"(?:value|data-code)=[""']([^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);

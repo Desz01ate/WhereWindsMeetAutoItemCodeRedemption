@@ -292,6 +292,17 @@
                     <Button Content="Fetch Latest Codes" Style="{StaticResource RoundedButtonStyle}" Margin="0,0,10,0"
                             Command="{Binding FetchCodesCommand}" IsEnabled="{Binding CanOperate}"/>
 
+                    <!-- Code source selector: which sources "Fetch Latest Codes" uses -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0" IsEnabled="{Binding CanOperate}">
+                        <TextBlock Text="Source:" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <RadioButton Content="Default sources" GroupName="CodeSourceGroup" Style="{StaticResource FilterRadioButtonStyle}" Margin="0,0,6,0"
+                                     ToolTip="Fetch from every website and API listed in config.json."
+                                     IsChecked="{Binding CodeSource, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=ConfiguredSources}"/>
+                        <RadioButton Content="codes.yar.gg" GroupName="CodeSourceGroup" Style="{StaticResource FilterRadioButtonStyle}" Margin="0"
+                                     ToolTip="Fetch only from the community-verified list at codes.yar.gg."
+                                     IsChecked="{Binding CodeSource, Converter={StaticResource EnumToBoolConverter}, ConverterParameter=CodesYarGg}"/>
+                    </StackPanel>
+
                     <Button Content="Inspect Target Positions" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,10,0"
                             Command="{Binding InspectTargetsCommand}" IsEnabled="{Binding CanOperate}"
                             ToolTip="Moves cursor to configured buttons in the game without clicking so you can verify coordinates."/>

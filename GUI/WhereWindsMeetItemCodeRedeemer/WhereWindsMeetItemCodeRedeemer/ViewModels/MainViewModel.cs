@@ -18,8 +18,19 @@ public enum CodeFilter
     RedeemedOnly
 }
 
+public enum CodeSourceMode
+{
+    /// <summary>The websites and APIs listed in config.json ("sources" + "api_sources").</summary>
+    ConfiguredSources,
+
+    /// <summary>Only the codes.yar.gg API.</summary>
+    CodesYarGg
+}
+
 public class MainViewModel : BaseViewModel
 {
+    private const string ManualSource = "Manual";
+
     private readonly IConfigService _configService;
     private readonly ICodeScraperService _scraperService;
     private readonly IGameWindowService _gameWindowService;
@@ -35,6 +46,7 @@ public class MainViewModel : BaseViewModel
     private ObservableCollection<RedeemCodeItem> _codes = new();
     private ICollectionView _filteredCodes;
     private CodeFilter _currentFilter = CodeFilter.All;
+    private CodeSourceMode _codeSource = CodeSourceMode.ConfiguredSources;
     private string _searchText = string.Empty;
     private string _manualCodeInput = string.Empty;
 
@@ -106,6 +118,13 @@ public class MainViewModel : BaseViewModel
                 _filteredCodes.Refresh();
             }
         }
+    }
+
+    /// <summary>Where "Fetch Latest Codes" looks for codes.</summary>
+    public CodeSourceMode CodeSource
+    {
+        get => _codeSource;
+        set => SetField(ref _codeSource, value);
     }
 
     public string SearchText
@@ -386,24 +405,59 @@ public class MainViewModel : BaseViewModel
 
         IsBusy = true;
         BusyStatusText = "Scraping code sources...";
-        Log("Starting code discovery from sources...");
+
+        var config = _configService.CurrentConfig;
+        IEnumerable<string> htmlSources;
+        IEnumerable<string> apiSources;
+        if (CodeSource == CodeSourceMode.CodesYarGg)
+        {
+            htmlSources = [];
+            apiSources = [CodeScraperService.CodesYarGgApiUrl];
+            Log("Starting code discovery from codes.yar.gg only...");
+        }
+        else
+        {
+            htmlSources = config.Sources;
+            apiSources = config.ApiSources;
+            Log("Starting code discovery from the sources in config.json...");
+        }
 
         var progress = new Progress<string>(Log);
         try
         {
             var scraped = await _scraperService.ScrapeAllAsync(
-                _configService.CurrentConfig.Sources,
-                _configService.CurrentConfig.ApiSources,
-                _configService.CurrentConfig.Timing.PageTimeoutSeconds,
+                htmlSources,
+                apiSources,
+                config.Timing.PageTimeoutSeconds,
                 progress);
+
+            if (scraped.Count == 0)
+            {
+                // Every source failed or returned nothing: don't wipe the list the user is looking at.
+                Log("[Warning] No codes were found, so the current list was kept.");
+                return;
+            }
 
             var redeemedSet = _configService.LoadRedeemedCodes();
 
-            // Merge with current codes
-            var currentMap = _codes.ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
+            // Replace the previously fetched codes with this result, so switching sources shows
+            // only the selected source. Codes the user added by hand are kept.
+            var manualCodes = _codes.Where(c => c.Source == ManualSource).ToList();
+            var manualSet = new HashSet<string>(manualCodes.Select(c => c.Code), StringComparer.OrdinalIgnoreCase);
+
+            _codes.Clear();
+            foreach (var item in manualCodes)
+            {
+                _codes.Add(item);
+            }
 
             foreach (var item in scraped)
             {
+                if (manualSet.Contains(item.Code))
+                {
+                    continue;
+                }
+
                 if (redeemedSet.Contains(item.Code))
                 {
                     item.Status = CodeStatus.Redeemed;
@@ -415,14 +469,12 @@ public class MainViewModel : BaseViewModel
                     item.IsSelected = true;
                 }
 
-                if (!currentMap.ContainsKey(item.Code))
-                {
-                    _codes.Add(item);
-                }
+                _codes.Add(item);
             }
 
             UpdateCounts();
-            Log($"Discovered {scraped.Count} codes total. Pending redemption: {PendingCodesCount}.");
+            var keptNote = manualCodes.Count > 0 ? $" Kept {manualCodes.Count} manually added code(s)." : string.Empty;
+            Log($"Discovered {scraped.Count} codes total. Pending redemption: {PendingCodesCount}.{keptNote}");
         }
         catch (Exception ex)
         {
@@ -452,7 +504,7 @@ public class MainViewModel : BaseViewModel
         var item = new RedeemCodeItem
         {
             Code = code,
-            Source = "Manual",
+            Source = ManualSource,
             Status = isRedeemed ? CodeStatus.Redeemed : CodeStatus.Pending,
             IsSelected = !isRedeemed
         };
