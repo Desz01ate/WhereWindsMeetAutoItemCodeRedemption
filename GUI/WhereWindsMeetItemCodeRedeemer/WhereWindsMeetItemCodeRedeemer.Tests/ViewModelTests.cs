@@ -46,12 +46,12 @@ public class ViewModelTests
         try
         {
             var configService = new ConfigService(Path.Combine(tempDir, "config.json"));
-            var scraperService = new CodeScraperService();
+            var scraperFactory = new FakeCodeScraperServiceFactory();
             var gameService = new MockGameWindowService();
             var inputService = new MockInputSimulationService();
             var calService = new MockCalibrationService();
 
-            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService, new FakeHotkeyMonitor());
+            var vm = new MainViewModel(configService, scraperFactory, gameService, inputService, calService, new FakeHotkeyMonitor());
 
             // Add test codes
             vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE1", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true });
@@ -105,12 +105,12 @@ public class ViewModelTests
         try
         {
             var configService = new ConfigService(Path.Combine(tempDir, "config.json"));
-            var scraperService = new CodeScraperService();
+            var scraperFactory = new FakeCodeScraperServiceFactory();
             var gameService = new MockGameWindowService();
             var inputService = new MockInputSimulationService();
             var calService = new MockCalibrationService();
 
-            var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService, new FakeHotkeyMonitor());
+            var vm = new MainViewModel(configService, scraperFactory, gameService, inputService, calService, new FakeHotkeyMonitor());
 
             vm.ManualCodeInput = "  my_new_code  ";
             vm.AddManualCodeCommand.Execute(null);
@@ -165,7 +165,7 @@ public class ViewModelTests
 
             var vm = new MainViewModel(
                 configService,
-                new CodeScraperService(),
+                new FakeCodeScraperServiceFactory(),
                 new MockGameWindowService(),
                 new MockInputSimulationService(),
                 new MockCalibrationService(),

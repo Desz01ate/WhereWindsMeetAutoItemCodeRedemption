@@ -212,7 +212,7 @@ public class StopHotkeyViewModelTests
             var hotkey = new FakeHotkeyMonitor();
             var vm = new MainViewModel(
                 configService,
-                new CodeScraperService(),
+                new FakeCodeScraperServiceFactory(),
                 new FoundGameWindowService(),
                 input,
                 new MockCalibrationService(),

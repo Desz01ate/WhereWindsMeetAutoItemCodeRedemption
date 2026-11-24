@@ -18,21 +18,12 @@ public enum CodeFilter
     RedeemedOnly
 }
 
-public enum CodeSourceMode
-{
-    /// <summary>The websites and APIs listed in config.json ("sources" + "api_sources").</summary>
-    ConfiguredSources,
-
-    /// <summary>Only the codes.yar.gg API.</summary>
-    CodesYarGg
-}
-
 public class MainViewModel : BaseViewModel
 {
     private const string ManualSource = "Manual";
 
     private readonly IConfigService _configService;
-    private readonly ICodeScraperService _scraperService;
+    private readonly ICodeScraperServiceFactory _scraperFactory;
     private readonly IGameWindowService _gameWindowService;
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
@@ -334,7 +325,7 @@ public class MainViewModel : BaseViewModel
 
     public MainViewModel(
         IConfigService configService,
-        ICodeScraperService scraperService,
+        ICodeScraperServiceFactory scraperFactory,
         IGameWindowService gameWindowService,
         IInputSimulationService inputService,
         ICalibrationService calibrationService,
@@ -342,7 +333,7 @@ public class MainViewModel : BaseViewModel
         IUpdateService? updateService = null)
     {
         _configService = configService;
-        _scraperService = scraperService;
+        _scraperFactory = scraperFactory;
         _gameWindowService = gameWindowService;
         _inputService = inputService;
         _calibrationService = calibrationService;
@@ -405,30 +396,14 @@ public class MainViewModel : BaseViewModel
 
         IsBusy = true;
         BusyStatusText = "Scraping code sources...";
-
-        var config = _configService.CurrentConfig;
-        IEnumerable<string> htmlSources;
-        IEnumerable<string> apiSources;
-        if (CodeSource == CodeSourceMode.CodesYarGg)
-        {
-            htmlSources = [];
-            apiSources = [CodeScraperService.CodesYarGgApiUrl];
-            Log("Starting code discovery from codes.yar.gg only...");
-        }
-        else
-        {
-            htmlSources = config.Sources;
-            apiSources = config.ApiSources;
-            Log("Starting code discovery from the sources in config.json...");
-        }
+        Log("Starting code discovery from sources...");
 
         var progress = new Progress<string>(Log);
         try
         {
-            var scraped = await _scraperService.ScrapeAllAsync(
-                htmlSources,
-                apiSources,
-                config.Timing.PageTimeoutSeconds,
+            var scraper = _scraperFactory.Create(CodeSource);
+            var scraped = await scraper.ScrapeAllAsync(
+                _configService.CurrentConfig.Timing.PageTimeoutSeconds,
                 progress);
 
             if (scraped.Count == 0)

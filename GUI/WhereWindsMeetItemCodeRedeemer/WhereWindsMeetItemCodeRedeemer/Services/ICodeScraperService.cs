@@ -2,22 +2,14 @@ using WhereWindsMeetItemCodeRedeemer.Models;
 
 namespace WhereWindsMeetItemCodeRedeemer.Services;
 
+/// <summary>
+/// One way of finding codes. Each implementation knows its own sources, so callers can swap
+/// scrapers without knowing where the codes come from. Created by <see cref="ICodeScraperServiceFactory"/>.
+/// </summary>
 public interface ICodeScraperService
 {
     Task<List<RedeemCodeItem>> ScrapeAllAsync(
-        IEnumerable<string> htmlSources,
-        IEnumerable<string> apiSources,
         double timeoutSeconds,
         IProgress<string>? progress = null,
-        CancellationToken cancellationToken = default);
-
-    Task<List<RedeemCodeItem>> ScrapeApiAsync(
-        string url,
-        double timeoutSeconds,
-        CancellationToken cancellationToken = default);
-
-    Task<List<RedeemCodeItem>> ScrapeHtmlAsync(
-        string url,
-        double timeoutSeconds,
         CancellationToken cancellationToken = default);
 }

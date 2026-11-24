@@ -248,7 +248,7 @@ public class UpdateServiceTests
 
             var vm = new MainViewModel(
                 new ConfigService(Path.Combine(tempDir, "config.json")),
-                new CodeScraperService(),
+                new FakeCodeScraperServiceFactory(),
                 new MockGameWindowService(),
                 new MockInputSimulationService(),
                 new MockCalibrationService(),

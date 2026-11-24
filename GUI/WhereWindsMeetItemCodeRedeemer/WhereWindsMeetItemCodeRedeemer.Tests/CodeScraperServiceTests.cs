@@ -45,7 +45,7 @@ public class CodeScraperServiceTests
         });
 
         var client = new HttpClient(handler);
-        var service = new CodeScraperService(client);
+        var service = new CodeScraperService([], [], client);
 
         var codes = await service.ScrapeApiAsync("https://api.test/codes", 10.0);
 
@@ -86,7 +86,7 @@ public class CodeScraperServiceTests
         });
 
         var client = new HttpClient(handler);
-        var service = new CodeScraperService(client);
+        var service = new CodeScraperService([], [], client);
 
         var codes = await service.ScrapeHtmlAsync("https://site.test/codes", 10.0);
 
@@ -122,12 +122,12 @@ public class CodeScraperServiceTests
         });
 
         var client = new HttpClient(handler);
-        var service = new CodeScraperService(client);
-
-        var allCodes = await service.ScrapeAllAsync(
+        var service = new CodeScraperService(
             new[] { "https://test.com/page" },
             new[] { "https://test.com/api" },
-            10.0);
+            client);
+
+        var allCodes = await service.ScrapeAllAsync(10.0);
 
         Assert.Equal(3, allCodes.Count);
         Assert.Contains(allCodes, c => c.Code == "SHAREDCODE");

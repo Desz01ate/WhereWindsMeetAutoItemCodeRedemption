@@ -8,7 +8,7 @@ namespace WhereWindsMeetItemCodeRedeemer;
 public partial class MainWindow : Window
 {
     private readonly IConfigService _configService;
-    private readonly ICodeScraperService _scraperService;
+    private readonly ICodeScraperServiceFactory _scraperFactory;
     private readonly IGameWindowService _gameWindowService;
     private readonly IInputSimulationService _inputService;
     private readonly ICalibrationService _calibrationService;
@@ -26,7 +26,7 @@ public partial class MainWindow : Window
         }
 
         _configService = new ConfigService();
-        _scraperService = new CodeScraperService();
+        _scraperFactory = new CodeScraperServiceFactory(_configService);
         _gameWindowService = new GameWindowService();
         _inputService = new InputSimulationService(_gameWindowService);
         _calibrationService = new CalibrationService(_gameWindowService, _inputService);
@@ -35,7 +35,7 @@ public partial class MainWindow : Window
 
         _viewModel = new MainViewModel(
             _configService,
-            _scraperService,
+            _scraperFactory,
             _gameWindowService,
             _inputService,
             _calibrationService,

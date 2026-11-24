@@ -7,13 +7,11 @@ using WhereWindsMeetItemCodeRedeemer.Models;
 
 namespace WhereWindsMeetItemCodeRedeemer.Services;
 
+/// <summary>
+/// Scrapes the HTML pages and JSON APIs it was created with (by default the ones in config.json).
+/// </summary>
 public class CodeScraperService : ICodeScraperService
 {
-    /// <summary>
-    /// Community-verified code list (https://codes.yar.gg). Its robots.txt explicitly allows /api/codes.
-    /// </summary>
-    public const string CodesYarGgApiUrl = "https://codes.yar.gg/api/codes";
-
     private static readonly Regex CodePattern = new(@"\b[A-Z0-9]{6,32}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex ExactCodePattern = new(@"^[A-Z0-9]{6,32}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex AttributePattern = new(@"(?:value|data-code)=[""']([^""']+)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -25,10 +23,17 @@ public class CodeScraperService : ICodeScraperService
         "REWARDS", "ACTIVE", "EXPIRED", "WHEREWINDS"
     };
 
+    private readonly List<string> _htmlSources;
+    private readonly List<string> _apiSources;
     private readonly HttpClient _httpClient;
 
-    public CodeScraperService(HttpClient? httpClient = null)
+    public CodeScraperService(
+        IEnumerable<string> htmlSources,
+        IEnumerable<string> apiSources,
+        HttpClient? httpClient = null)
     {
+        _htmlSources = htmlSources.ToList();
+        _apiSources = apiSources.ToList();
         _httpClient = httpClient ?? CreateDefaultHttpClient();
     }
 
@@ -51,8 +56,6 @@ public class CodeScraperService : ICodeScraperService
     }
 
     public async Task<List<RedeemCodeItem>> ScrapeAllAsync(
-        IEnumerable<string> htmlSources,
-        IEnumerable<string> apiSources,
         double timeoutSeconds,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
@@ -60,7 +63,7 @@ public class CodeScraperService : ICodeScraperService
         var found = new Dictionary<string, RedeemCodeItem>(StringComparer.OrdinalIgnoreCase);
 
         // 1. Scrape API sources
-        foreach (var url in apiSources)
+        foreach (var url in _apiSources)
         {
             if (string.IsNullOrWhiteSpace(url)) continue;
             cancellationToken.ThrowIfCancellationRequested();
@@ -85,7 +88,7 @@ public class CodeScraperService : ICodeScraperService
         }
 
         // 2. Scrape HTML sources
-        foreach (var url in htmlSources)
+        foreach (var url in _htmlSources)
         {
             if (string.IsNullOrWhiteSpace(url)) continue;
             cancellationToken.ThrowIfCancellationRequested();
