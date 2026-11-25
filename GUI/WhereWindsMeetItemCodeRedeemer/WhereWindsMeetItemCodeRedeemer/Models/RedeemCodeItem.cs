@@ -20,6 +20,8 @@ public class RedeemCodeItem : INotifyPropertyChanged
     private CodeStatus _status = CodeStatus.Pending;
     private bool _isSelected = true;
     private string? _statusMessage;
+    private bool? _isActive;
+    private DateTimeOffset? _expiredAt;
 
     public string Code
     {
@@ -58,6 +60,60 @@ public class RedeemCodeItem : INotifyPropertyChanged
         get => _statusMessage;
         set => SetField(ref _statusMessage, value);
     }
+
+    public bool? IsActive
+    {
+        get => _isActive;
+        set
+        {
+            if (SetField(ref _isActive, value))
+            {
+                OnPropertyChanged(nameof(ActiveStatusText));
+                OnPropertyChanged(nameof(IsEffectivelyActive));
+            }
+        }
+    }
+
+    public DateTimeOffset? ExpiredAt
+    {
+        get => _expiredAt;
+        set
+        {
+            if (SetField(ref _expiredAt, value))
+            {
+                OnPropertyChanged(nameof(ExpiredAtText));
+                OnPropertyChanged(nameof(ActiveStatusText));
+                OnPropertyChanged(nameof(IsEffectivelyActive));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Effective active state taking ExpiredAt into account:
+    /// returns false if explicitly inactive or if ExpiredAt is in the past;
+    /// returns true if explicitly active and not past ExpiredAt;
+    /// returns null when unknown.
+    /// </summary>
+    public bool? IsEffectivelyActive
+    {
+        get
+        {
+            if (IsActive == false) return false;
+            if (ExpiredAt.HasValue && ExpiredAt.Value <= DateTimeOffset.UtcNow) return false;
+            return IsActive;
+        }
+    }
+
+    public string ActiveStatusText => IsEffectivelyActive switch
+    {
+        true => "Active",
+        false => "Expired",
+        null => "Unknown"
+    };
+
+    public string ExpiredAtText => ExpiredAt.HasValue
+        ? ExpiredAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        : "—";
 
     public bool IsPending => Status == CodeStatus.Pending;
     public bool IsRedeemed => Status == CodeStatus.Redeemed || Status == CodeStatus.Success;
