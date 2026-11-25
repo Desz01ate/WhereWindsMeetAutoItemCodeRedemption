@@ -18,6 +18,25 @@ public enum CodeFilter
     RedeemedOnly
 }
 
+public enum CodeActivityFilter
+{
+    All,
+    ActiveOnly,
+    ActiveOrUnknown,
+    ExpiredOnly,
+    UnknownOnly
+}
+
+public sealed record CodeStatusFilterOption(CodeFilter Value, string DisplayName)
+{
+    public override string ToString() => DisplayName;
+}
+
+public sealed record CodeActivityFilterOption(CodeActivityFilter Value, string DisplayName)
+{
+    public override string ToString() => DisplayName;
+}
+
 public class MainViewModel : BaseViewModel
 {
     private readonly IConfigService _configService;
@@ -34,7 +53,8 @@ public class MainViewModel : BaseViewModel
 
     private ObservableCollection<RedeemCodeItem> _codes = new();
     private ICollectionView _filteredCodes;
-    private CodeFilter _currentFilter = CodeFilter.All;
+    private CodeFilter _currentFilter = CodeFilter.PendingOnly;
+    private CodeActivityFilter _currentActivityFilter = CodeActivityFilter.ActiveOnly;
     private string _searchText = string.Empty;
     private string _manualCodeInput = string.Empty;
 
@@ -96,6 +116,13 @@ public class MainViewModel : BaseViewModel
 
     public ICollectionView FilteredCodes => _filteredCodes;
 
+    public IReadOnlyList<CodeStatusFilterOption> StatusFilterOptions { get; } =
+    [
+        new(CodeFilter.All, "All"),
+        new(CodeFilter.PendingOnly, "Pending"),
+        new(CodeFilter.RedeemedOnly, "Redeemed")
+    ];
+
     public CodeFilter CurrentFilter
     {
         get => _currentFilter;
@@ -104,6 +131,29 @@ public class MainViewModel : BaseViewModel
             if (SetField(ref _currentFilter, value))
             {
                 _filteredCodes.Refresh();
+                OnPropertyChanged(nameof(VisibleCodesCount));
+            }
+        }
+    }
+
+    public IReadOnlyList<CodeActivityFilterOption> ActivityFilterOptions { get; } =
+    [
+        new(CodeActivityFilter.ActiveOnly, "Active Only"),
+        new(CodeActivityFilter.ActiveOrUnknown, "Active & Unknown"),
+        new(CodeActivityFilter.All, "All"),
+        new(CodeActivityFilter.ExpiredOnly, "Expired Only"),
+        new(CodeActivityFilter.UnknownOnly, "Unknown")
+    ];
+
+    public CodeActivityFilter CurrentActivityFilter
+    {
+        get => _currentActivityFilter;
+        set
+        {
+            if (SetField(ref _currentActivityFilter, value))
+            {
+                _filteredCodes.Refresh();
+                OnPropertyChanged(nameof(VisibleCodesCount));
             }
         }
     }
@@ -116,6 +166,7 @@ public class MainViewModel : BaseViewModel
             if (SetField(ref _searchText, value))
             {
                 _filteredCodes.Refresh();
+                OnPropertyChanged(nameof(VisibleCodesCount));
             }
         }
     }
@@ -180,6 +231,8 @@ public class MainViewModel : BaseViewModel
     public int TotalCodesCount => _codes.Count;
     public int PendingCodesCount => _codes.Count(c => c.Status == CodeStatus.Pending);
     public int RedeemedCodesCount => _codes.Count(c => c.IsRedeemed);
+    public int ActiveCodesCount => _codes.Count(c => c.IsEffectivelyActive == true);
+    public int VisibleCodesCount => _codes.Count(FilterCodeItem);
     public int SelectedPendingCount => _codes.Count(c => c.IsSelected && c.Status == CodeStatus.Pending);
 
     public ObservableCollection<string> LogEntries => _logEntries;
@@ -404,6 +457,26 @@ public class MainViewModel : BaseViewModel
 
             foreach (var item in scraped)
             {
+                if (currentMap.TryGetValue(item.Code, out var existing))
+                {
+                    if (item.IsActive.HasValue)
+                    {
+                        existing.IsActive = item.IsActive;
+                    }
+
+                    if (item.ExpiredAt.HasValue)
+                    {
+                        existing.ExpiredAt = item.ExpiredAt;
+                    }
+
+                    if (existing.IsEffectivelyActive == false)
+                    {
+                        existing.IsSelected = false;
+                    }
+
+                    continue;
+                }
+
                 if (redeemedSet.Contains(item.Code))
                 {
                     item.Status = CodeStatus.Redeemed;
@@ -412,17 +485,15 @@ public class MainViewModel : BaseViewModel
                 else
                 {
                     item.Status = CodeStatus.Pending;
-                    item.IsSelected = true;
+                    item.IsSelected = item.IsEffectivelyActive != false && MatchesActivityFilter(item);
                 }
 
-                if (!currentMap.ContainsKey(item.Code))
-                {
-                    _codes.Add(item);
-                }
+                _codes.Add(item);
             }
 
+            _filteredCodes.Refresh();
             UpdateCounts();
-            Log($"Discovered {scraped.Count} codes total. Pending redemption: {PendingCodesCount}.");
+            Log($"Discovered {scraped.Count} codes total ({ActiveCodesCount} active). Pending redemption: {PendingCodesCount}.");
         }
         catch (Exception ex)
         {
@@ -476,7 +547,9 @@ public class MainViewModel : BaseViewModel
     {
         foreach (var item in _codes)
         {
-            item.IsSelected = item.Status == CodeStatus.Pending;
+            item.IsSelected = item.Status == CodeStatus.Pending
+                && item.IsEffectivelyActive != false
+                && FilterCodeItem(item);
         }
         UpdateCounts();
     }
@@ -542,7 +615,7 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
-        var toRedeem = _codes.Where(c => c.IsSelected && c.Status == CodeStatus.Pending).ToList();
+        var toRedeem = _codes.Where(c => c is { IsSelected: true, Status: CodeStatus.Pending }).ToList();
         if (!toRedeem.Any())
         {
             MessageBox.Show(
@@ -977,18 +1050,34 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(TotalCodesCount));
         OnPropertyChanged(nameof(PendingCodesCount));
         OnPropertyChanged(nameof(RedeemedCodesCount));
+        OnPropertyChanged(nameof(ActiveCodesCount));
+        OnPropertyChanged(nameof(VisibleCodesCount));
         OnPropertyChanged(nameof(SelectedPendingCount));
     }
+
+    private bool MatchesActivityFilter(RedeemCodeItem item) => CurrentActivityFilter switch
+    {
+        CodeActivityFilter.All => true,
+        CodeActivityFilter.ActiveOnly => item.IsEffectivelyActive == true,
+        CodeActivityFilter.ActiveOrUnknown => item.IsEffectivelyActive != false,
+        CodeActivityFilter.ExpiredOnly => item.IsEffectivelyActive == false,
+        CodeActivityFilter.UnknownOnly => item.IsEffectivelyActive == null,
+        _ => true
+    };
 
     private bool FilterCodeItem(object obj)
     {
         if (obj is not RedeemCodeItem item) return false;
 
-        // Status filter
+        // Redemption status filter
         if (CurrentFilter == CodeFilter.PendingOnly && item.Status != CodeStatus.Pending)
             return false;
 
         if (CurrentFilter == CodeFilter.RedeemedOnly && !item.IsRedeemed)
+            return false;
+
+        // Activity / validity filter
+        if (!MatchesActivityFilter(item))
             return false;
 
         // Search query filter

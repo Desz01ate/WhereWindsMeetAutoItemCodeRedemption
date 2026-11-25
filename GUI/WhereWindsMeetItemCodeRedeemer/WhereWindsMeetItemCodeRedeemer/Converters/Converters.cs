@@ -59,6 +59,24 @@ public class StatusToBrushConverter : IValueConverter
         throw new NotImplementedException();
 }
 
+public class NullableBoolToBrushConverter : IValueConverter
+{
+    private static readonly SolidColorBrush TrueBrush = new(Color.FromRgb(16, 185, 129));   // Green (Active)
+    private static readonly SolidColorBrush FalseBrush = new(Color.FromRgb(239, 68, 68));   // Red (Expired)
+    private static readonly SolidColorBrush NullBrush = new(Color.FromRgb(71, 85, 105));    // Slate (Unknown)
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value switch
+        {
+            true => TrueBrush,
+            false => FalseBrush,
+            _ => NullBrush
+        };
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotImplementedException();
+}
+
 public class NullToBoolConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>

@@ -47,7 +47,13 @@ public partial class MainWindow : Window
         _viewModel.RequestOpenCalibration += OnRequestOpenCalibration;
         _viewModel.RequestApplicationShutdown += () => Application.Current?.Shutdown();
 
-        Loaded += async (_, _) => await _viewModel.CheckForUpdatesAsync(silent: true);
+        Loaded += async (_, _) =>
+        {
+            var checkUpdateTask = _viewModel.CheckForUpdatesAsync(silent: true);
+            var fetchNewCodesTask = _viewModel.FetchCodesAsync();
+
+            await Task.WhenAll(checkUpdateTask, fetchNewCodesTask);
+        };
 
         // Auto-scroll activity log
         if (LogListBox.ItemsSource is INotifyCollectionChanged notify)

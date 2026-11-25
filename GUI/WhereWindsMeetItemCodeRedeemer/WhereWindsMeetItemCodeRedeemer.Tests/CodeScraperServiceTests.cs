@@ -50,8 +50,50 @@ public class CodeScraperServiceTests
         var codes = await service.ScrapeApiAsync("https://api.test/codes", 10.0);
 
         Assert.Equal(2, codes.Count);
-        Assert.Contains(codes, c => c.Code == "VALIDCODE1");
-        Assert.Contains(codes, c => c.Code == "VALIDCODE2");
+        Assert.Contains(codes, c => c.Code == "VALIDCODE1" && c.IsActive == true && c.ExpiredAt == null);
+        Assert.Contains(codes, c => c.Code == "VALIDCODE2" && c.IsActive == true && c.ExpiredAt == null);
+    }
+
+    [Fact]
+    public async Task ScrapeApiAsync_ParsesActiveAndExpiredWithTimestamps()
+    {
+        var jsonResponse = """
+        {
+          "active": [
+            { "code": "ACTIVECODE1", "expiresAt": "2099-12-04T23:59:00.000Z" },
+            { "code": "ACTIVECODE2" }
+          ],
+          "expired": [
+            { "code": "EXPIREDCODE1", "expiredAt": "2026-07-02T04:26:08.212Z" }
+          ]
+        }
+        """;
+
+        var handler = new MockHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(jsonResponse, Encoding.UTF8, "application/json")
+        });
+
+        var client = new HttpClient(handler);
+        var service = new CodeScraperService(client);
+
+        var codes = await service.ScrapeApiAsync("https://codes.yar.gg/api/codes", 10.0);
+
+        Assert.Equal(3, codes.Count);
+
+        var activeWithExpiry = Assert.Single(codes, c => c.Code == "ACTIVECODE1");
+        Assert.True(activeWithExpiry.IsActive);
+        Assert.True(activeWithExpiry.IsSelected);
+        Assert.Equal(DateTimeOffset.Parse("2099-12-04T23:59:00.000Z"), activeWithExpiry.ExpiredAt);
+
+        var activeNoExpiry = Assert.Single(codes, c => c.Code == "ACTIVECODE2");
+        Assert.True(activeNoExpiry.IsActive);
+        Assert.Null(activeNoExpiry.ExpiredAt);
+
+        var expired = Assert.Single(codes, c => c.Code == "EXPIREDCODE1");
+        Assert.False(expired.IsActive);
+        Assert.False(expired.IsSelected);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T04:26:08.212Z"), expired.ExpiredAt);
     }
 
     [Fact]
@@ -95,6 +137,11 @@ public class CodeScraperServiceTests
         Assert.Contains(codes, c => c.Code == "ATTRCODE2");
         Assert.Contains(codes, c => c.Code == "TABLECODE1");
         Assert.Contains(codes, c => c.Code == "TABLECODE2");
+        Assert.All(codes, c =>
+        {
+            Assert.Null(c.IsActive);
+            Assert.Null(c.ExpiredAt);
+        });
     }
 
     [Fact]

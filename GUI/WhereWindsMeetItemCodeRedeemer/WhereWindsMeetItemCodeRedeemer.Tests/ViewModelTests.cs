@@ -54,9 +54,9 @@ public class ViewModelTests
             var vm = new MainViewModel(configService, scraperService, gameService, inputService, calService, new FakeHotkeyMonitor());
 
             // Add test codes
-            vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE1", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true });
-            vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE2", Source = "SiteB", Status = CodeStatus.Redeemed, IsSelected = false });
-            vm.Codes.Add(new RedeemCodeItem { Code = "BONUSCODE", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true });
+            vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE1", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true, IsActive = true });
+            vm.Codes.Add(new RedeemCodeItem { Code = "TESTCODE2", Source = "SiteB", Status = CodeStatus.Redeemed, IsSelected = false, IsActive = true });
+            vm.Codes.Add(new RedeemCodeItem { Code = "BONUSCODE", Source = "SiteA", Status = CodeStatus.Pending, IsSelected = true, IsActive = true });
 
             Assert.Equal(3, vm.TotalCodesCount);
             Assert.Equal(2, vm.PendingCodesCount);
@@ -172,6 +172,103 @@ public class ViewModelTests
                 new FakeHotkeyMonitor());
 
             Assert.False(vm.IsFullyCalibrated);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public void ViewModel_ActivityFilter_DefaultsToActiveOnly_AndComposesCorrectly()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "WWM_VMTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var configService = new ConfigService(Path.Combine(tempDir, "config.json"));
+            var vm = new MainViewModel(
+                configService,
+                new CodeScraperService(),
+                new MockGameWindowService(),
+                new MockInputSimulationService(),
+                new MockCalibrationService(),
+                new FakeHotkeyMonitor());
+
+            Assert.Equal(CodeActivityFilter.ActiveOnly, vm.CurrentActivityFilter);
+
+            vm.Codes.Add(new RedeemCodeItem
+            {
+                Code = "ACTIVE1",
+                Source = "codes.yar.gg",
+                Status = CodeStatus.Pending,
+                IsSelected = true,
+                IsActive = true,
+                ExpiredAt = DateTimeOffset.UtcNow.AddDays(5)
+            });
+            vm.Codes.Add(new RedeemCodeItem
+            {
+                Code = "PASTEXPIRY",
+                Source = "codes.yar.gg",
+                Status = CodeStatus.Pending,
+                IsSelected = false,
+                IsActive = true,
+                ExpiredAt = DateTimeOffset.UtcNow.AddDays(-1)
+            });
+            vm.Codes.Add(new RedeemCodeItem
+            {
+                Code = "EXPIRED1",
+                Source = "codes.yar.gg",
+                Status = CodeStatus.Pending,
+                IsSelected = false,
+                IsActive = false,
+                ExpiredAt = DateTimeOffset.UtcNow.AddDays(-10)
+            });
+            vm.Codes.Add(new RedeemCodeItem
+            {
+                Code = "UNKNOWN1",
+                Source = "game8.co",
+                Status = CodeStatus.Pending,
+                IsSelected = false,
+                IsActive = null
+            });
+
+            // Default: ActiveOnly -> only ACTIVE1 (PASTEXPIRY is past ExpiredAt so effectively expired)
+            Assert.Equal(1, vm.ActiveCodesCount);
+            var activeOnly = vm.FilteredCodes.Cast<RedeemCodeItem>().ToList();
+            Assert.Single(activeOnly);
+            Assert.Equal("ACTIVE1", activeOnly[0].Code);
+
+            // ActiveOrUnknown -> ACTIVE1 + UNKNOWN1
+            vm.CurrentActivityFilter = CodeActivityFilter.ActiveOrUnknown;
+            var activeOrUnknown = vm.FilteredCodes.Cast<RedeemCodeItem>().ToList();
+            Assert.Equal(2, activeOrUnknown.Count);
+            Assert.Contains(activeOrUnknown, c => c.Code == "ACTIVE1");
+            Assert.Contains(activeOrUnknown, c => c.Code == "UNKNOWN1");
+
+            // ExpiredOnly -> PASTEXPIRY + EXPIRED1
+            vm.CurrentActivityFilter = CodeActivityFilter.ExpiredOnly;
+            var expiredOnly = vm.FilteredCodes.Cast<RedeemCodeItem>().ToList();
+            Assert.Equal(2, expiredOnly.Count);
+            Assert.Contains(expiredOnly, c => c.Code == "PASTEXPIRY");
+            Assert.Contains(expiredOnly, c => c.Code == "EXPIRED1");
+
+            // UnknownOnly -> UNKNOWN1
+            vm.CurrentActivityFilter = CodeActivityFilter.UnknownOnly;
+            var unknownOnly = vm.FilteredCodes.Cast<RedeemCodeItem>().ToList();
+            Assert.Single(unknownOnly);
+            Assert.Equal("UNKNOWN1", unknownOnly[0].Code);
+
+            // All -> all 4; SelectPendingOnly should still skip expired items
+            vm.CurrentActivityFilter = CodeActivityFilter.All;
+            Assert.Equal(4, vm.FilteredCodes.Cast<RedeemCodeItem>().Count());
+            vm.SelectPendingOnlyCommand.Execute(null);
+            Assert.True(vm.Codes.Single(c => c.Code == "ACTIVE1").IsSelected);
+            Assert.True(vm.Codes.Single(c => c.Code == "UNKNOWN1").IsSelected);
+            Assert.False(vm.Codes.Single(c => c.Code == "EXPIRED1").IsSelected);
+            Assert.False(vm.Codes.Single(c => c.Code == "PASTEXPIRY").IsSelected);
         }
         finally
         {

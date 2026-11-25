@@ -121,29 +121,73 @@ public class CodeScraperService : ICodeScraperService
 
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        var sourceDomain = GetSourceDomain(url);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (root.TryGetProperty("active", out var activeElement) && activeElement.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in activeElement.EnumerateArray())
-            {
-                if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("code", out var codeProp))
-                {
-                    var codeStr = codeProp.GetString()?.Trim().ToUpperInvariant();
-                    if (!string.IsNullOrEmpty(codeStr) && ExactCodePattern.IsMatch(codeStr) && !StopWords.Contains(codeStr))
-                    {
-                        list.Add(new RedeemCodeItem
-                        {
-                            Code = codeStr,
-                            Source = GetSourceDomain(url),
-                            Status = CodeStatus.Pending,
-                            IsSelected = true
-                        });
-                    }
-                }
-            }
+            ExtractApiEntries(activeElement, isActive: true, datePropertyName: "expiresAt", sourceDomain, seen, list);
+        }
+
+        if (root.TryGetProperty("expired", out var expiredElement) && expiredElement.ValueKind == JsonValueKind.Array)
+        {
+            ExtractApiEntries(expiredElement, isActive: false, datePropertyName: "expiredAt", sourceDomain, seen, list);
         }
 
         return list;
+    }
+
+    private static void ExtractApiEntries(
+        JsonElement arrayElement,
+        bool isActive,
+        string datePropertyName,
+        string sourceDomain,
+        HashSet<string> seen,
+        List<RedeemCodeItem> target)
+    {
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("code", out var codeProp))
+                continue;
+
+            var codeStr = codeProp.GetString()?.Trim().ToUpperInvariant();
+            if (string.IsNullOrEmpty(codeStr) || !ExactCodePattern.IsMatch(codeStr) || StopWords.Contains(codeStr))
+                continue;
+
+            if (!seen.Add(codeStr))
+                continue;
+
+            DateTimeOffset? expiredAt = TryParseDateTimeOffset(item, datePropertyName);
+            if (!expiredAt.HasValue && !isActive)
+            {
+                // Fallback to expiresAt on expired entries if expiredAt is absent
+                expiredAt = TryParseDateTimeOffset(item, "expiresAt");
+            }
+
+            target.Add(new RedeemCodeItem
+            {
+                Code = codeStr,
+                Source = sourceDomain,
+                Status = CodeStatus.Pending,
+                IsSelected = isActive,
+                IsActive = isActive,
+                ExpiredAt = expiredAt
+            });
+        }
+    }
+
+    private static DateTimeOffset? TryParseDateTimeOffset(JsonElement obj, string propertyName)
+    {
+        if (obj.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            var raw = prop.GetString();
+            if (!string.IsNullOrWhiteSpace(raw) && DateTimeOffset.TryParse(raw, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
     }
 
     public async Task<List<RedeemCodeItem>> ScrapeHtmlAsync(
